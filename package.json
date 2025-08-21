@@ -1,0 +1,42 @@
+{
+  "name": "courier-parcel-management-system",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MERN Courier & Parcel Management System",
+  "main": "index.js",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
+    "server": "npm run dev --workspace server",
+    "client": "npm run dev --workspace client"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raihanmiraj/courier-parcel-management-system.git"
+  },
+  "keywords": [
+    "mern",
+    "express",
+    "mongodb",
+    "react",
+    "socket.io",
+    "courier",
+    "parcel"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/raihanmiraj/courier-parcel-management-system/issues"
+  },
+  "homepage": "https://github.com/raihanmiraj/courier-parcel-management-system#readme",
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.11.0"
+  }
+}
