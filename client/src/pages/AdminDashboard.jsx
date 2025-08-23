@@ -27,10 +27,26 @@ function Navbar({ onLogout, user }) {
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const { currentLanguage } = useLanguage();
+  const t = getTranslations(currentLanguage);
+  
   return (
     <>
       <Navbar user={user} onLogout={logout} />
       <main className="container py-6">
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+            <div className="flex gap-3">
+              <button
+                onClick={() => window.location.href = '/admin/tracking'}
+                className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              >
+                🚚 {t.trackAgents}
+              </button>
+            </div>
+          </div>
+        </div>
         <AdminPanel />
       </main>
     </>

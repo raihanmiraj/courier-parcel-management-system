@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { getTranslations } from '../translations';
 import { createSocket } from '../socket';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -30,12 +32,19 @@ export default function CustomerParcelDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currentLanguage } = useLanguage();
+  const t = getTranslations(currentLanguage);
   const [parcel, setParcel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [routeData, setRouteData] = useState(null);
   const [agentLocation, setAgentLocation] = useState(null);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [distanceToDelivery, setDistanceToDelivery] = useState(null);
+  const [etaToDelivery, setEtaToDelivery] = useState(null);
+  const [agentSpeed, setAgentSpeed] = useState(null);
+  const [previousAgentLocation, setPreviousAgentLocation] = useState(null);
+  const [lastLocationUpdate, setLastLocationUpdate] = useState(null);
 
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
@@ -46,6 +55,37 @@ export default function CustomerParcelDetail() {
   const socketRef = useRef(null);
   const agentIdRef = useRef(null);
 
+  // Calculate distance between two points using Haversine formula
+  const calculateDistance = useCallback((point1, point2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (point2[0] - point1[0]) * Math.PI / 180;
+    const dLon = (point2[1] - point1[1]) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(point1[0] * Math.PI / 180) * Math.cos(point2[0] * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }, []);
+
+  // Calculate agent speed based on location changes
+  const calculateAgentSpeed = useCallback((currentLoc, previousLoc, timeDiff) => {
+    if (!previousLoc || !currentLoc || timeDiff <= 0) return null;
+    
+    const distance = calculateDistance(
+      [previousLoc.lat, previousLoc.lng],
+      [currentLoc.lat, currentLoc.lng]
+    );
+    
+    // Convert time difference to hours
+    const timeInHours = timeDiff / (1000 * 60 * 60);
+    
+    // Calculate speed in km/h
+    const speed = distance / timeInHours;
+    
+    // Filter out unrealistic speeds (e.g., > 120 km/h for delivery vehicles)
+    return speed > 0 && speed <= 120 ? speed : null;
+  }, [calculateDistance]);
+
   // Load parcel data
   useEffect(() => {
     setLoading(true);
@@ -54,16 +94,18 @@ export default function CustomerParcelDetail() {
         setParcel(res.data);
         if (res.data.currentLocation) {
           const locationData = res.data.currentLocation;
-          setAgentLocation({
+          const newLocation = {
             lat: locationData.lat,
             lng: locationData.lng,
             updatedAt: locationData.updatedAt || new Date().toISOString()
-          });
+          };
+          setAgentLocation(newLocation);
+          setLastLocationUpdate(new Date(locationData.updatedAt || new Date()));
         }
       })
-      .catch(() => setError('Failed to load parcel'))
+      .catch(() => setError(t.failedToLoadParcel))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, t.failedToLoadParcel]);
 
   // Keep current agentId in a ref to avoid stale closures in socket handler
   useEffect(() => {
@@ -90,8 +132,22 @@ export default function CustomerParcelDetail() {
           lng: data.location.lng,
           updatedAt: data.timestamp
         };
-        console.log('CustomerParcelDetail: Setting new agent location:', newLocation);
+        
+        // Calculate speed if we have previous location
+        if (agentLocation && lastLocationUpdate) {
+          const timeDiff = new Date(data.timestamp).getTime() - lastLocationUpdate.getTime();
+          const speed = calculateAgentSpeed(newLocation, agentLocation, timeDiff);
+          if (speed !== null) {
+            setAgentSpeed(speed);
+          }
+        }
+        
+        // Update locations
+        setPreviousAgentLocation(agentLocation);
         setAgentLocation(newLocation);
+        setLastLocationUpdate(new Date(data.timestamp));
+        
+        console.log('CustomerParcelDetail: Setting new agent location:', newLocation);
       } else {
         console.log('CustomerParcelDetail: Agent ID mismatch or missing target agent');
       }
@@ -116,7 +172,31 @@ export default function CustomerParcelDetail() {
       // s.offAny(anyLogger);
       s.disconnect();
     };
-  }, [user?._id]);
+  }, [user?._id, agentLocation, lastLocationUpdate, calculateAgentSpeed]);
+
+  // Calculate distance and ETA when agent location or route data changes
+  useEffect(() => {
+    if (!agentLocation || !routeData?.delivery) return;
+    
+    // Calculate distance from agent to delivery
+    const distance = calculateDistance(
+      [agentLocation.lat, agentLocation.lng],
+      routeData.delivery
+    );
+    setDistanceToDelivery(distance);
+    
+    // Calculate ETA based on agent speed or default speed
+    const effectiveSpeed = agentSpeed || 25; // Default to 25 km/h for delivery vehicles
+    const etaHours = distance / effectiveSpeed;
+    const etaMinutes = Math.round(etaHours * 60);
+    setEtaToDelivery(etaMinutes);
+    
+    console.log('CustomerParcelDetail: Updated distance and ETA:', {
+      distance: distance.toFixed(2) + ' km',
+      eta: etaMinutes + ' minutes',
+      speed: effectiveSpeed + ' km/h'
+    });
+  }, [agentLocation, routeData, agentSpeed, calculateDistance]);
 
   // Test function to manually set agent location (for debugging)
   const testAgentLocation = useCallback(() => {
@@ -377,7 +457,7 @@ export default function CustomerParcelDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading parcel details...</p>
+          <p className="text-gray-600">{t.loadingParcelDetails}</p>
         </div>
       </div>
     );
@@ -393,7 +473,7 @@ export default function CustomerParcelDetail() {
             onClick={() => navigate('/customer')}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            Back to Dashboard
+            {t.backToCustomer}
           </button>
         </div>
       </div>
@@ -417,8 +497,8 @@ export default function CustomerParcelDetail() {
                 </svg>
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Parcel Details</h1>
-                <p className="text-gray-600">Tracking #{parcel.trackingCode}</p>
+                <h1 className="text-2xl font-bold text-gray-900">{t.parcelDetails}</h1>
+                <p className="text-gray-600">{t.trackingCode} #{parcel.trackingCode}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -454,51 +534,51 @@ export default function CustomerParcelDetail() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-xl border shadow-sm">
               <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold text-gray-900">Parcel Information</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{t.parcelInformation}</h2>
               </div>
               <div className="p-6">
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Tracking Code</label>
+                    <label className="text-sm font-medium text-gray-500">{t.trackingCode}</label>
                     <p className="text-lg font-semibold text-gray-900">{parcel.trackingCode}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Status</label>
+                    <label className="text-sm font-medium text-gray-500">{t.status}</label>
                     <p className="text-lg font-semibold text-gray-900">{parcel.status}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Pickup Address</label>
+                    <label className="text-sm font-medium text-gray-500">{t.pickupAddress}</label>
                     <p className="text-sm text-gray-900">{parcel.pickupAddress}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Delivery Address</label>
+                    <label className="text-sm font-medium text-gray-500">{t.deliveryAddress}</label>
                     <p className="text-sm text-gray-900">{parcel.deliveryAddress}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Parcel Size</label>
+                    <label className="text-sm font-medium text-gray-500">{t.parcelSize}</label>
                     <p className="text-sm text-gray-900">{parcel.parcelSize}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Parcel Type</label>
+                    <label className="text-sm font-medium text-gray-500">{t.parcelType}</label>
                     <p className="text-sm text-gray-900">{parcel.parcelType}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Payment Type</label>
+                    <label className="text-sm font-medium text-gray-500">{t.paymentType}</label>
                     <p className="text-sm text-gray-900">{parcel.paymentType}</p>
                   </div>
                   {parcel.paymentType === 'COD' && (
                     <div>
-                      <label className="text-sm font-medium text-gray-500">COD Amount</label>
+                      <label className="text-sm font-medium text-gray-500">{t.codAmount}</label>
                       <p className="text-sm text-gray-900">${parcel.codAmount}</p>
                     </div>
                   )}
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Created Date</label>
+                    <label className="text-sm font-medium text-gray-500">{t.created}</label>
                     <p className="text-sm text-gray-900">{new Date(parcel.createdAt).toLocaleDateString()}</p>
                   </div>
                   {parcel.notes && (
                     <div className="sm:col-span-2">
-                      <label className="text-sm font-medium text-gray-500">Notes</label>
+                      <label className="text-sm font-medium text-gray-500">{t.notes}</label>
                       <p className="text-sm text-gray-900">{parcel.notes}</p>
                     </div>
                   )}
@@ -508,9 +588,9 @@ export default function CustomerParcelDetail() {
 
             <div className="bg-white rounded-xl border shadow-sm">
               <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold text-gray-900">Delivery Route</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{t.deliveryRoute}</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Real-time tracking from pickup to delivery location
+                  {t.realTimeTracking}
                 </p>
               </div>
               <div className="p-6">
@@ -524,7 +604,7 @@ export default function CustomerParcelDetail() {
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                        <p className="text-sm text-gray-600">Loading map...</p>
+                        <p className="text-sm text-gray-600">{t.loadingMap}</p>
                       </div>
                     </div>
                   )}
@@ -533,10 +613,10 @@ export default function CustomerParcelDetail() {
                    <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                      <div className="flex items-center gap-2">
                        <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                       <span className="text-sm font-medium text-blue-800">Live tracking active</span>
+                       <span className="text-sm font-medium text-blue-800">{t.liveTrackingActive}</span>
                      </div>
                      <p className="text-xs text-blue-600 mt-1">
-                       Agent location updated: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
+                       {t.agentLocationUpdated}: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
                      </p>
                    </div>
                  )}
@@ -544,16 +624,16 @@ export default function CustomerParcelDetail() {
                  {/* Debug button for testing agent location */}
                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                    <div className="flex items-center justify-between">
-                     <span className="text-sm font-medium text-yellow-800">Debug Tools</span>
+                     <span className="text-sm font-medium text-yellow-800">{t.debugTools}</span>
                      <button
                        onClick={testAgentLocation}
                        className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 transition-colors"
                      >
-                       Test Agent Location
+                       {t.testAgentLocation}
                      </button>
                    </div>
                    <p className="text-xs text-yellow-600 mt-1">
-                     Click to test bike marker placement on map
+                     {t.clickToTestBikeMarker}
                    </p>
                  </div>
               </div>
@@ -564,7 +644,7 @@ export default function CustomerParcelDetail() {
             {parcel.agent && (
               <div className="bg-white rounded-xl border shadow-sm">
                 <div className="p-6 border-b">
-                  <h3 className="text-lg font-semibold text-gray-900">Delivery Agent</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">{t.deliveryAgent}</h3>
                 </div>
                 <div className="p-6">
                   <div className="text-center">
@@ -577,7 +657,7 @@ export default function CustomerParcelDetail() {
                       <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-medium text-green-800">Online</span>
+                          <span className="text-xs font-medium text-green-800">{t.online}</span>
                         </div>
                       </div>
                     )}
@@ -588,23 +668,35 @@ export default function CustomerParcelDetail() {
 
             <div className="bg-white rounded-xl border shadow sm">
               <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold text-gray-900">Delivery Details</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t.deliveryDetails}</h3>
               </div>
               <div className="p-6 space-y-4">
+                {distanceToDelivery !== null && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">{t.distance}</label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {distanceToDelivery.toFixed(2)} km
+                    </p>
+                  </div>
+                )}
+                {etaToDelivery !== null && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">{t.estimatedDelivery}</label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {etaToDelivery} minutes
+                    </p>
+                  </div>
+                )}
+                {agentSpeed !== null && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">{t.agentSpeed}</label>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {agentSpeed.toFixed(1)} km/h
+                    </p>
+                  </div>
+                )}
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Estimated Delivery</label>
-                  <p className="text-sm text-gray-900">
-                    {parcel.etaMinutes ? `${parcel.etaMinutes} minutes` : 'Calculating...'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Distance</label>
-                  <p className="text-sm text-gray-900">
-                    {routeData ? 'Route calculated' : 'Calculating route...'}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Last Updated</label>
+                  <label className="text-sm font-medium text-gray-500">{t.lastUpdated}</label>
                   <p className="text-sm text-gray-900">
                     {parcel.updatedAt ? new Date(parcel.updatedAt).toLocaleString() : 'N/A'}
                   </p>
@@ -614,7 +706,7 @@ export default function CustomerParcelDetail() {
 
             <div className="bg-white rounded-xl border shadow-sm">
               <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t.quickActions}</h3>
               </div>
               <div className="p-6 space-y-3">
                 {parcel.status === 'In Transit' && (
@@ -622,14 +714,14 @@ export default function CustomerParcelDetail() {
                     onClick={() => navigate(`/customer/parcel/${parcel._id}/track`)}
                     className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    🚚 Live Track
+                    🚚 {t.liveTrack}
                   </button>
                 )}
                 <button
                   onClick={() => window.print()}
                   className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
                 >
-                  🖨️ Print Details
+                  🖨️ {t.printDetails}
                 </button>
               </div>
             </div>

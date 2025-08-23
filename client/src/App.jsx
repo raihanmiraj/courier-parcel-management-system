@@ -14,6 +14,8 @@ import PushCurrentLocation from './pages/PushCurrentLocation.jsx';
 import ParcelRoute from './pages/ParcelRoute.jsx';
 import ParcelDetailView from './pages/ParcelDetailView.jsx';
 import CustomerParcelDetail from './pages/CustomerParcelDetail.jsx';
+import AdminAgentTracking from './pages/AdminAgentTracking.jsx';
+import AgentParcelDetails from './pages/AgentParcelDetails.jsx';
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -41,6 +43,8 @@ export default function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<AdminRoute />}>
                 <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/tracking" element={<AdminAgentTracking />} />
+                <Route path="/admin/parcel/:id" element={<AgentParcelDetails />} />
               </Route>
               <Route element={<DeliveryAgentRoute />}>
                 <Route path="/agent" element={<AgentDashboard />} />

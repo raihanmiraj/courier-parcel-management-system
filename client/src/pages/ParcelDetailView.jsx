@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch, api } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { getTranslations } from '../translations';
 import { createSocket } from '../socket';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -24,6 +26,8 @@ export default function ParcelDetailView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currentLanguage } = useLanguage();
+  const t = getTranslations(currentLanguage);
   const agentId = user?.id ?? user?._id;
   const [parcel, setParcel] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -72,8 +76,8 @@ export default function ParcelDetailView() {
     api.get(`/parcels/${id}`).then(res => {
       setParcel(res.data);
       setStatus(res.data.status);
-    }).catch(() => setError('Failed to load parcel')).finally(() => setLoading(false));
-  }, [id]);
+    }).catch(() => setError(t.failedToLoadParcel)).finally(() => setLoading(false));
+  }, [id, t.failedToLoadParcel]);
 
   // Initialize socket
   useEffect(() => {
@@ -179,11 +183,11 @@ export default function ParcelDetailView() {
       });
       setParcel(updated);
     } catch (err) {
-      setError('Failed to update status');
+      setError(t.failedToUpdateStatus);
     } finally {
       setUpdatingStatus(false);
     }
-  }, [status, parcel]);
+  }, [status, parcel, t.failedToUpdateStatus]);
 
   const sendCurrentLocation = useCallback(async () => {
     if (!navigator.geolocation || !parcel?._id) return;
@@ -215,15 +219,15 @@ export default function ParcelDetailView() {
           setDistanceToPickup(distance);
         }
       } catch (err) {
-        setError('Failed to send location');
+        setError(t.failedToSendLocation);
       } finally {
         setSendingLocation(false);
       }
     }, () => {
-      setError('Failed to get current location');
+      setError(t.failedToGetCurrentLocation);
       setSendingLocation(false);
     });
-  }, [parcel?._id, agentId, routeData, calculateDistance]);
+  }, [parcel?._id, agentId, routeData, calculateDistance, t.failedToSendLocation, t.failedToGetCurrentLocation]);
 
   const sendCustomLocation = useCallback(async () => {
     if (!locationInput.trim() || !parcel?._id) return;
@@ -256,18 +260,18 @@ export default function ParcelDetailView() {
       
       setLocationInput('');
     } catch (err) {
-      setError('Invalid location address');
+      setError(t.invalidLocationAddress);
     } finally {
       setSendingLocation(false);
     }
-  }, [locationInput, parcel?._id, agentId, routeData, geocodeAddress, calculateDistance]);
+  }, [locationInput, parcel?._id, agentId, routeData, geocodeAddress, calculateDistance, t.invalidLocationAddress]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading parcel details...</p>
+          <p className="text-gray-600">{t.loadingParcelDetails}</p>
         </div>
       </div>
     );
@@ -283,7 +287,7 @@ export default function ParcelDetailView() {
             onClick={() => navigate('/agent')}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            Back to Dashboard
+            {t.backToAgent}
           </button>
         </div>
       </div>
@@ -308,8 +312,8 @@ export default function ParcelDetailView() {
                 </svg>
               </button>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900">Parcel Details</h1>
-                <p className="text-sm text-gray-600">Tracking #{parcel.trackingCode}</p>
+                <h1 className="text-lg font-semibold text-gray-900">{t.parcelDetails}</h1>
+                <p className="text-sm text-gray-600">{t.trackingCode} #{parcel.trackingCode}</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -327,7 +331,7 @@ export default function ParcelDetailView() {
                 disabled={updatingStatus || status === parcel.status}
                 className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {updatingStatus ? 'Updating...' : 'Update Status'}
+                {updatingStatus ? t.updating : t.updateStatus}
               </button>
             </div>
           </div>
@@ -357,51 +361,51 @@ export default function ParcelDetailView() {
             {/* Basic Info */}
             <div className="rounded-xl border bg-white p-6 shadow-sm">
               <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold text-gray-900">Parcel Information</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{t.parcelInformation}</h2>
               </div>
               <div className="p-6">
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Tracking Code</label>
+                    <label className="text-sm font-medium text-gray-500">{t.trackingCode}</label>
                     <p className="text-lg font-semibold text-gray-900">{parcel.trackingCode}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Status</label>
+                    <label className="text-sm font-medium text-gray-500">{t.status}</label>
                     <p className="text-lg font-semibold text-gray-900">{parcel.status}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Pickup Address</label>
+                    <label className="text-sm font-medium text-gray-500">{t.pickupAddress}</label>
                     <p className="text-sm text-gray-900">{parcel.pickupAddress}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Delivery Address</label>
+                    <label className="text-sm font-medium text-gray-500">{t.deliveryAddress}</label>
                     <p className="text-sm text-gray-900">{parcel.deliveryAddress}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Parcel Size</label>
+                    <label className="text-sm font-medium text-gray-500">{t.parcelSize}</label>
                     <p className="text-sm text-gray-900">{parcel.parcelSize}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Parcel Type</label>
+                    <label className="text-sm font-medium text-gray-500">{t.parcelType}</label>
                     <p className="text-sm text-gray-900">{parcel.parcelType}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Payment Type</label>
+                    <label className="text-sm font-medium text-gray-500">{t.paymentType}</label>
                     <p className="text-sm text-gray-900">{parcel.paymentType}</p>
                   </div>
                   {parcel.paymentType === 'COD' && (
                     <div>
-                      <label className="text-sm font-medium text-gray-500">COD Amount</label>
+                      <label className="text-sm font-medium text-gray-500">{t.codAmount}</label>
                       <p className="text-sm text-gray-900">${parcel.codAmount}</p>
                     </div>
                   )}
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Created Date</label>
+                    <label className="text-sm font-medium text-gray-500">{t.created}</label>
                     <p className="text-sm text-gray-900">{new Date(parcel.createdAt).toLocaleDateString()}</p>
                   </div>
                   {parcel.notes && (
                     <div className="sm:col-span-2">
-                      <label className="text-sm font-medium text-gray-500">Notes</label>
+                      <label className="text-sm font-medium text-gray-500">{t.notes}</label>
                       <p className="text-sm text-gray-900">{parcel.notes}</p>
                     </div>
                   )}
@@ -412,9 +416,9 @@ export default function ParcelDetailView() {
             {/* Route Map */}
             <div className="rounded-xl border bg-white shadow-sm">
               <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold text-gray-900">Delivery Route</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{t.deliveryRoute}</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Interactive map showing pickup and delivery locations
+                  {t.interactiveMapPickupDelivery}
                 </p>
               </div>
               <div className="p-6">
@@ -434,9 +438,9 @@ export default function ParcelDetailView() {
             {/* Agent Location */}
             <div className="rounded-xl border bg-white shadow-sm">
               <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold text-gray-900">Agent Location</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t.agentLocation}</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Update your current location for real-time tracking
+                  {t.updateCurrentLocation}
                 </p>
               </div>
               <div className="p-6 space-y-4">
@@ -446,14 +450,14 @@ export default function ParcelDetailView() {
                   disabled={sendingLocation}
                   className="w-full rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
                 >
-                  {sendingLocation ? 'Sending...' : '📍 Use My Current Location'}
+                  {sendingLocation ? t.sending : '📍 ' + t.useMyCurrentLocation}
                 </button>
                 
                 {/* Custom Location Input */}
                 <div className="space-y-3">
                   <input
                     type="text"
-                    placeholder="Search location (e.g., Times Square)"
+                    placeholder={t.searchLocation}
                     value={locationInput}
                     onChange={(e) => setLocationInput(e.target.value)}
                     className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -463,7 +467,7 @@ export default function ParcelDetailView() {
                     disabled={sendingLocation || !locationInput.trim()}
                     className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
-                    🔍 Send Custom Location
+                    🔍 {t.sendCustomLocation}
                   </button>
                 </div>
               </div>
@@ -472,31 +476,31 @@ export default function ParcelDetailView() {
             {/* Delivery Metrics */}
             <div className="rounded-xl border bg-white shadow-sm">
               <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold text-gray-900">Delivery Metrics</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t.deliveryMetrics}</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Real-time delivery calculations and estimates
+                  {t.realTimeDeliveryCalculations}
                 </p>
               </div>
               <div className="p-6 space-y-4">
                 {distanceToPickup !== null && (
                   <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <label className="text-xs font-medium text-blue-600 uppercase tracking-wide">Distance to Pickup</label>
+                    <label className="text-xs font-medium text-blue-600 uppercase tracking-wide">{t.distanceToPickup}</label>
                     <p className="text-2xl font-bold text-blue-900">{distanceToPickup.toFixed(1)} km</p>
                   </div>
                 )}
                 {etaToDelivery !== null && (
                   <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                    <label className="text-xs font-medium text-green-600 uppercase tracking-wide">ETA to Delivery</label>
+                    <label className="text-xs font-medium text-green-600 uppercase tracking-wide">{t.etaToDelivery}</label>
                     <p className="text-2xl font-bold text-green-900">{etaToDelivery} minutes</p>
                   </div>
                 )}
                 <div className="grid gap-3 pt-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Parcel Size</label>
+                    <label className="text-sm font-medium text-gray-500">{t.parcelSize}</label>
                     <p className="text-sm font-medium text-gray-900">{parcel.parcelSize}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Parcel Type</label>
+                    <label className="text-sm font-medium text-gray-500">{t.parcelType}</label>
                     <p className="text-sm font-medium text-gray-900">{parcel.parcelType}</p>
                   </div>
                 </div>
@@ -507,9 +511,9 @@ export default function ParcelDetailView() {
             {parcel.customer && (
               <div className="rounded-xl border bg-white shadow-sm">
                 <div className="p-6 border-b">
-                  <h3 className="text-lg font-semibold text-gray-900">Customer Information</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">{t.customerInformation}</h3>
                   <p className="text-sm text-gray-600 mt-1">
-                    Contact details for the parcel recipient
+                    {t.contactDetailsForRecipient}
                   </p>
                 </div>
                 <div className="p-6 space-y-4">
@@ -527,9 +531,9 @@ export default function ParcelDetailView() {
             {/* Quick Actions */}
             <div className="rounded-xl border bg-white shadow-sm">
               <div className="p-6 border-b">
-                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                <h3 className="text-lg font-semibold text-gray-900">{t.quickActions}</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Common tasks and shortcuts
+                  {t.commonTasksAndShortcuts}
                 </p>
               </div>
               <div className="p-6 space-y-3">
@@ -537,13 +541,13 @@ export default function ParcelDetailView() {
                   onClick={() => window.print()}
                   className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
                 >
-                  🖨️ Print Details
+                  🖨️ {t.printDetails}
                 </button>
                 <button
                   onClick={() => navigate('/agent')}
                   className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                 >
-                  🏠 Back to Dashboard
+                  🏠 {t.backToAgent}
                 </button>
               </div>
             </div>
