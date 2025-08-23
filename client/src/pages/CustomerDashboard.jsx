@@ -1,19 +1,26 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { getTranslations } from '../translations';
 import { Link } from 'react-router-dom';
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx';
 
 function Navbar({ onLogout, user }) {
+  const { currentLanguage } = useLanguage();
+  const t = getTranslations(currentLanguage);
+  
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-[9999999] w-full border-b bg-white/80 backdrop-blur">
       <div className="container flex h-14 items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded bg-brand-600 text-white grid place-items-center font-bold">C</div>
-          <span className="font-semibold">Courier Manager</span>
+          <span className="font-semibold">{t.courierManager}</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-600">{user?.name} <span className="text-gray-400">• {user?.role}</span></div>
-          <button onClick={onLogout} className="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200">Logout</button>
+          <LanguageSwitcher />
+          <button onClick={onLogout} className="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200">{t.logout}</button>
         </div>
       </div>
     </header>
@@ -21,6 +28,8 @@ function Navbar({ onLogout, user }) {
 }
 
 function BookingForm({ onCreated }) {
+  const { currentLanguage } = useLanguage();
+  const t = getTranslations(currentLanguage);
   const [form, setForm] = useState({
     pickupAddress: '',
     deliveryAddress: '',
@@ -44,54 +53,54 @@ function BookingForm({ onCreated }) {
   };
   return (
     <div className="rounded-xl border bg-white p-6 shadow-sm">
-      <h3 className="mb-4 text-lg font-semibold">Book a Parcel</h3>
+      <h3 className="mb-4 text-lg font-semibold">{t.bookParcel}</h3>
       <form onSubmit={submit} className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium">Pickup address</label>
+          <label className="text-sm font-medium">{t.pickupAddress}</label>
           <input className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.pickupAddress} onChange={e => setForm({ ...form, pickupAddress: e.target.value })} />
         </div>
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium">Delivery address</label>
+          <label className="text-sm font-medium">{t.deliveryAddress}</label>
           <input className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.deliveryAddress} onChange={e => setForm({ ...form, deliveryAddress: e.target.value })} />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium">Size</label>
+            <label className="text-sm font-medium">{t.parcelSize}</label>
             <select className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.parcelSize} onChange={e => setForm({ ...form, parcelSize: e.target.value })}>
-              <option>Small</option>
-              <option>Medium</option>
-              <option>Large</option>
+              <option>{t.small}</option>
+              <option>{t.medium}</option>
+              <option>{t.large}</option>
             </select>
           </div>
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium">Type</label>
+            <label className="text-sm font-medium">{t.parcelType}</label>
             <select className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.parcelType} onChange={e => setForm({ ...form, parcelType: e.target.value })}>
-              <option>Standard</option>
-              <option>Document</option>
-              <option>Fragile</option>
-              <option>Perishable</option>
+              <option>{t.standard}</option>
+              <option>{t.document}</option>
+              <option>{t.fragile}</option>
+              <option>{t.perishable}</option>
             </select>
           </div>
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium">Payment</label>
+            <label className="text-sm font-medium">{t.paymentType}</label>
             <select className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.paymentType} onChange={e => setForm({ ...form, paymentType: e.target.value })}>
-              <option>Prepaid</option>
-              <option>COD</option>
+              <option>{t.prepaid}</option>
+              <option>{t.cod}</option>
             </select>
           </div>
         </div>
         {form.paymentType === 'COD' && (
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium">COD amount</label>
+            <label className="text-sm font-medium">{t.codAmount}</label>
             <input type="number" className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.codAmount} onChange={e => setForm({ ...form, codAmount: Number(e.target.value) })} />
           </div>
         )}
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium">Notes</label>
+          <label className="text-sm font-medium">{t.notes}</label>
           <input className="w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
         </div>
         <div>
-          <button disabled={loading} className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-50">{loading ? 'Booking…' : 'Book Parcel'}</button>
+          <button disabled={loading} className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-50">{loading ? t.booking : t.bookParcelButton}</button>
         </div>
       </form>
     </div>
@@ -99,18 +108,21 @@ function BookingForm({ onCreated }) {
 }
 
 function ParcelTable({ parcels }) {
+  const { currentLanguage } = useLanguage();
+  const t = getTranslations(currentLanguage);
+  
   return (
     <div className="rounded-xl border bg-white p-6 shadow-sm">
-      <h3 className="mb-4 text-lg font-semibold">Parcels</h3>
+      <h3 className="mb-4 text-lg font-semibold">{t.parcels}</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b text-xs text-gray-500">
-              <th className="py-2 pr-4">Tracking</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2 pr-4">Payment</th>
-              <th className="py-2 pr-4">Created</th>
-              <th className="py-2 pr-4">Actions</th>
+              <th className="py-2 pr-4">{t.tracking}</th>
+              <th className="py-2 pr-4">{t.status}</th>
+              <th className="py-2 pr-4">{t.payment}</th>
+              <th className="py-2 pr-4">{t.created}</th>
+              <th className="py-2 pr-4">{t.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -128,7 +140,7 @@ function ParcelTable({ parcels }) {
                       to={`/customer/parcel/${p._id}`}
                       className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
                     >
-                      View
+                      {t.view}
                     </Link>
                   </div>
                 </td>

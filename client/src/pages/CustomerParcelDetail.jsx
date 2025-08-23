@@ -12,10 +12,18 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
+const iconUrl = "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png"
+const iconRetinaUrl = "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png"
+const shadowUrl = "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"
+
+
+
+
+delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
+  iconRetinaUrl: iconRetinaUrl,
+  iconUrl: iconUrl,
+  shadowUrl: shadowUrl,
 });
 
 export default function CustomerParcelDetail() {
@@ -45,7 +53,12 @@ export default function CustomerParcelDetail() {
       .then(res => {
         setParcel(res.data);
         if (res.data.currentLocation) {
-          setAgentLocation(res.data.currentLocation);
+          const locationData = res.data.currentLocation;
+          setAgentLocation({
+            lat: locationData.lat,
+            lng: locationData.lng,
+            updatedAt: locationData.updatedAt || new Date().toISOString()
+          });
         }
       })
       .catch(() => setError('Failed to load parcel'))
@@ -68,12 +81,19 @@ export default function CustomerParcelDetail() {
     const handleAgentLocationUpdate = (data) => {
       console.log('CustomerParcelDetail: Agent location update received:', data);
       const targetAgentId = agentIdRef.current;
+      console.log('CustomerParcelDetail: Target agent ID:', targetAgentId, 'Received agent ID:', data.agentId);
+      
       if (targetAgentId && data.agentId === targetAgentId) {
-        setAgentLocation({
+        console.log('CustomerParcelDetail: Agent ID matches, updating location');
+        const newLocation = {
           lat: data.location.lat,
           lng: data.location.lng,
           updatedAt: data.timestamp
-        });
+        };
+        console.log('CustomerParcelDetail: Setting new agent location:', newLocation);
+        setAgentLocation(newLocation);
+      } else {
+        console.log('CustomerParcelDetail: Agent ID mismatch or missing target agent');
       }
     };
 
@@ -88,14 +108,26 @@ export default function CustomerParcelDetail() {
     s.on('connect_error', (err) => console.log('CustomerParcelDetail: socket connect_error', err.message));
 
     s.on('agent:location:update', handleAgentLocationUpdate);
-    s.onAny(anyLogger);
+    // Remove onAny as it might not be available in all Socket.IO versions
+    // s.onAny(anyLogger);
 
     return () => {
       s.off('agent:location:update', handleAgentLocationUpdate);
-      s.offAny(anyLogger);
+      // s.offAny(anyLogger);
       s.disconnect();
     };
   }, [user?._id]);
+
+  // Test function to manually set agent location (for debugging)
+  const testAgentLocation = useCallback(() => {
+    const testLocation = {
+      lat: 23.78,
+      lng: 90.41,
+      updatedAt: new Date().toISOString()
+    };
+    console.log('CustomerParcelDetail: Testing agent location update:', testLocation);
+    setAgentLocation(testLocation);
+  }, []);
 
   // Geocode addresses and create route
   const geocodeAddress = useCallback(async (query) => {
@@ -261,16 +293,19 @@ export default function CustomerParcelDetail() {
   // Update agent marker when location changes
   useEffect(() => {
     console.log('CustomerParcelDetail: Agent location effect triggered:', agentLocation);
-    if (!agentLocation?.lat || !agentLocation?.lng || !mapRef.current) {
+    if (!agentLocation?.lat || !agentLocation?.lng || !mapRef.current || !mapInitialized) {
       console.log('CustomerParcelDetail: Missing data for agent marker:', {
         agentLocation,
-        mapRef: !!mapRef.current
+        mapRef: !!mapRef.current,
+        mapInitialized
       });
       return;
     }
 
     const map = mapRef.current;
     const location = [agentLocation.lat, agentLocation.lng];
+    
+    console.log('CustomerParcelDetail: Adding/updating agent marker at:', location);
 
     const bikeIcon = L.divIcon({
       html: '🏍️',
@@ -280,6 +315,7 @@ export default function CustomerParcelDetail() {
     });
 
     if (!agentMarkerRef.current) {
+      console.log('CustomerParcelDetail: Creating new agent marker');
       agentMarkerRef.current = L.marker(location, { icon: bikeIcon }).addTo(map);
       if (parcel?.agent) {
         agentMarkerRef.current.bindPopup(`
@@ -291,14 +327,19 @@ export default function CustomerParcelDetail() {
         `);
       }
     } else {
+      console.log('CustomerParcelDetail: Updating existing agent marker');
       agentMarkerRef.current.setLatLng(location);
     }
 
+    // Ensure the agent location is visible on the map
     const bounds = map.getBounds();
     if (!bounds.contains(location)) {
+      console.log('CustomerParcelDetail: Panning map to agent location');
       map.panTo(location, { animate: true });
     }
-  }, [agentLocation, parcel?.agent]);
+    
+    console.log('CustomerParcelDetail: Agent marker updated successfully');
+  }, [agentLocation, parcel?.agent, mapInitialized]);
 
   useEffect(() => {
     return () => {
@@ -363,7 +404,7 @@ export default function CustomerParcelDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
+      <header className="bg-white border-b sticky top-0 z-[9999999] shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -382,9 +423,9 @@ export default function CustomerParcelDetail() {
             </div>
             <div className="flex items-center gap-3">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${parcel.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-                  parcel.status === 'In Transit' ? 'bg-blue-100 text-blue-800' :
-                    parcel.status === 'Failed' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
+                parcel.status === 'In Transit' ? 'bg-blue-100 text-blue-800' :
+                  parcel.status === 'Failed' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
                 }`}>
                 {parcel.status}
               </span>
@@ -488,17 +529,33 @@ export default function CustomerParcelDetail() {
                     </div>
                   )}
                 </div>
-                {agentLocation && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm font-medium text-blue-800">Live tracking active</span>
-                    </div>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Agent location updated: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
-                    </p>
-                  </div>
-                )}
+                                 {agentLocation && (
+                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                     <div className="flex items-center gap-2">
+                       <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                       <span className="text-sm font-medium text-blue-800">Live tracking active</span>
+                     </div>
+                     <p className="text-xs text-blue-600 mt-1">
+                       Agent location updated: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
+                     </p>
+                   </div>
+                 )}
+                 
+                 {/* Debug button for testing agent location */}
+                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                   <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium text-yellow-800">Debug Tools</span>
+                     <button
+                       onClick={testAgentLocation}
+                       className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 transition-colors"
+                     >
+                       Test Agent Location
+                     </button>
+                   </div>
+                   <p className="text-xs text-yellow-600 mt-1">
+                     Click to test bike marker placement on map
+                   </p>
+                 </div>
               </div>
             </div>
           </div>

@@ -262,30 +262,61 @@ export default function ParcelDetailView() {
     }
   }, [locationInput, parcel?._id, agentId, routeData, geocodeAddress, calculateDistance]);
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (error && !parcel) return <div className="p-6 text-red-600">{error}</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading parcel details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !parcel) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 text-xl mb-4">⚠️</div>
+          <p className="text-red-600">{error}</p>
+          <button
+            onClick={() => navigate('/agent')}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!parcel) return null;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-40">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
+      <header className="bg-white border-b sticky top-0 z-[99999999999] shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => navigate('/agent')}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-gray-600 hover:text-gray-900 transition-colors p-2 rounded-md hover:bg-gray-100"
               >
-                ← Back to Dashboard
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
-              <h1 className="text-xl font-semibold">Parcel #{parcel.trackingCode}</h1>
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900">Parcel Details</h1>
+                <p className="text-sm text-gray-600">Tracking #{parcel.trackingCode}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <select 
                 value={status} 
                 onChange={(e) => setStatus(e.target.value)}
-                className="rounded-md border px-3 py-2"
+                className="rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 {PARCEL_STATUSES.map(s => (
                   <option key={s} value={s}>{s}</option>
@@ -294,7 +325,7 @@ export default function ParcelDetailView() {
               <button 
                 onClick={updateStatus}
                 disabled={updatingStatus || status === parcel.status}
-                className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {updatingStatus ? 'Updating...' : 'Update Status'}
               </button>
@@ -303,140 +334,219 @@ export default function ParcelDetailView() {
         </div>
       </header>
 
-      <main className="container py-6 space-y-6">
+      <main className="container mx-auto px-4 py-6 space-y-6">
         {/* Error Display */}
         {error && (
-          <div className="rounded-md bg-red-50 px-4 py-3 text-red-700">
-            {error}
+          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Parcel Information */}
         <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-6">
             {/* Basic Info */}
             <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Parcel Details</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Tracking Code</label>
-                  <p className="text-lg font-semibold">{parcel.trackingCode}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Status</label>
-                  <p className="text-lg font-semibold">{parcel.status}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Pickup Address</label>
-                  <p className="text-sm">{parcel.pickupAddress}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Delivery Address</label>
-                  <p className="text-sm">{parcel.deliveryAddress}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Payment Type</label>
-                  <p className="text-sm">{parcel.paymentType}</p>
-                </div>
-                {parcel.paymentType === 'COD' && (
+              <div className="p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Parcel Information</h2>
+              </div>
+              <div className="p-6">
+                <div className="grid gap-6 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">COD Amount</label>
-                    <p className="text-sm">${parcel.codAmount}</p>
+                    <label className="text-sm font-medium text-gray-500">Tracking Code</label>
+                    <p className="text-lg font-semibold text-gray-900">{parcel.trackingCode}</p>
                   </div>
-                )}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Status</label>
+                    <p className="text-lg font-semibold text-gray-900">{parcel.status}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Pickup Address</label>
+                    <p className="text-sm text-gray-900">{parcel.pickupAddress}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Delivery Address</label>
+                    <p className="text-sm text-gray-900">{parcel.deliveryAddress}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Parcel Size</label>
+                    <p className="text-sm text-gray-900">{parcel.parcelSize}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Parcel Type</label>
+                    <p className="text-sm text-gray-900">{parcel.parcelType}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Payment Type</label>
+                    <p className="text-sm text-gray-900">{parcel.paymentType}</p>
+                  </div>
+                  {parcel.paymentType === 'COD' && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">COD Amount</label>
+                      <p className="text-sm text-gray-900">${parcel.codAmount}</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Created Date</label>
+                    <p className="text-sm text-gray-900">{new Date(parcel.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  {parcel.notes && (
+                    <div className="sm:col-span-2">
+                      <label className="text-sm font-medium text-gray-500">Notes</label>
+                      <p className="text-sm text-gray-900">{parcel.notes}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Route Map */}
-            <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Delivery Route</h3>
-              <div ref={mapElRef} className="h-96 w-full overflow-hidden rounded-lg" />
+            <div className="rounded-xl border bg-white shadow-sm">
+              <div className="p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Delivery Route</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Interactive map showing pickup and delivery locations
+                </p>
+              </div>
+              <div className="p-6">
+                <div className="relative">
+                  <div
+                    ref={mapElRef}
+                    className="h-96 w-full rounded-lg overflow-hidden border bg-gray-100"
+                    style={{ minHeight: '384px' }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Agent Location */}
-            <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Agent Location</h3>
-              
-              {/* Current Location Button */}
-              <button 
-                onClick={sendCurrentLocation}
-                disabled={sendingLocation}
-                className="w-full rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50 mb-3"
-              >
-                {sendingLocation ? 'Sending...' : 'Use My Current Location'}
-              </button>
-              
-              {/* Custom Location Input */}
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Search location (e.g., Times Square)"
-                  value={locationInput}
-                  onChange={(e) => setLocationInput(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2"
-                />
+            <div className="rounded-xl border bg-white shadow-sm">
+              <div className="p-6 border-b">
+                <h3 className="text-lg font-semibold text-gray-900">Agent Location</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Update your current location for real-time tracking
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                {/* Current Location Button */}
                 <button 
-                  onClick={sendCustomLocation}
-                  disabled={sendingLocation || !locationInput.trim()}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                  onClick={sendCurrentLocation}
+                  disabled={sendingLocation}
+                  className="w-full rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
                 >
-                  Send Custom Location
+                  {sendingLocation ? 'Sending...' : '📍 Use My Current Location'}
                 </button>
+                
+                {/* Custom Location Input */}
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Search location (e.g., Times Square)"
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button 
+                    onClick={sendCustomLocation}
+                    disabled={sendingLocation || !locationInput.trim()}
+                    className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    🔍 Send Custom Location
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Delivery Metrics */}
-            <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Delivery Metrics</h3>
-              <div className="space-y-3">
+            <div className="rounded-xl border bg-white shadow-sm">
+              <div className="p-6 border-b">
+                <h3 className="text-lg font-semibold text-gray-900">Delivery Metrics</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Real-time delivery calculations and estimates
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
                 {distanceToPickup !== null && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Distance to Pickup</label>
-                    <p className="text-lg font-semibold">{distanceToPickup.toFixed(1)} km</p>
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <label className="text-xs font-medium text-blue-600 uppercase tracking-wide">Distance to Pickup</label>
+                    <p className="text-2xl font-bold text-blue-900">{distanceToPickup.toFixed(1)} km</p>
                   </div>
                 )}
                 {etaToDelivery !== null && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">ETA to Delivery</label>
-                    <p className="text-lg font-semibold">{etaToDelivery} minutes</p>
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <label className="text-xs font-medium text-green-600 uppercase tracking-wide">ETA to Delivery</label>
+                    <p className="text-2xl font-bold text-green-900">{etaToDelivery} minutes</p>
                   </div>
                 )}
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Parcel Size</label>
-                  <p className="text-sm">{parcel.parcelSize}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Parcel Type</label>
-                  <p className="text-sm">{parcel.parcelType}</p>
-                </div>
-                {parcel.notes && (
+                <div className="grid gap-3 pt-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Notes</label>
-                    <p className="text-sm">{parcel.notes}</p>
+                    <label className="text-sm font-medium text-gray-500">Parcel Size</label>
+                    <p className="text-sm font-medium text-gray-900">{parcel.parcelSize}</p>
                   </div>
-                )}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Parcel Type</label>
+                    <p className="text-sm font-medium text-gray-900">{parcel.parcelType}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Customer Info */}
             {parcel.customer && (
-              <div className="rounded-xl border bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Name</label>
-                    <p className="text-sm">{parcel.customer.name}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Email</label>
-                    <p className="text-sm">{parcel.customer.email}</p>
+              <div className="rounded-xl border bg-white shadow-sm">
+                <div className="p-6 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Customer Information</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Contact details for the parcel recipient
+                  </p>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">👤</span>
+                    </div>
+                    <h4 className="font-semibold text-gray-900">{parcel.customer.name}</h4>
+                    <p className="text-sm text-gray-600">{parcel.customer.email}</p>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Quick Actions */}
+            <div className="rounded-xl border bg-white shadow-sm">
+              <div className="p-6 border-b">
+                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Common tasks and shortcuts
+                </p>
+              </div>
+              <div className="p-6 space-y-3">
+                <button
+                  onClick={() => window.print()}
+                  className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                >
+                  🖨️ Print Details
+                </button>
+                <button
+                  onClick={() => navigate('/agent')}
+                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  🏠 Back to Dashboard
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </main>
