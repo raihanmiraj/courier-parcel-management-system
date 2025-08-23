@@ -1,0 +1,613 @@
+{
+	"info": {
+		"_postman_id": "courier-parcel-management-api",
+		"name": "Courier & Parcel Management System API",
+		"description": "Complete API collection for the Courier & Parcel Management System built with MERN stack. Includes authentication, parcel management, user management, analytics, and geocoding endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "courier-parcel-management-api"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "User Registration",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"customer\",\n  \"phone\": \"+1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						},
+						"description": "Register a new user with role (admin, agent, customer)"
+					},
+					"response": []
+				},
+				{
+					"name": "User Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login user and receive JWT token"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for user registration and login"
+		},
+		{
+			"name": "Parcel Management",
+			"item": [
+				{
+					"name": "Get All Parcels (Role-based)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/parcels",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels"
+							]
+						},
+						"description": "Get parcels based on user role (customers see their own, agents see assigned, admins see all)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create New Parcel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"pickupAddress\": \"123 Main St, City, State 12345\",\n  \"deliveryAddress\": \"456 Oak Ave, City, State 12345\",\n  \"parcelSize\": \"Medium\",\n  \"parcelType\": \"Standard\",\n  \"paymentType\": \"Prepaid\",\n  \"codAmount\": 0,\n  \"notes\": \"Handle with care\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/parcels",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels"
+							]
+						},
+						"description": "Create a new parcel booking (customers only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Parcel by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/parcels/{{parcel_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels",
+								"{{parcel_id}}"
+							]
+						},
+						"description": "Get detailed information about a specific parcel"
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Agent to Parcel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agentId\": \"{{agent_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/parcels/{{parcel_id}}/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels",
+								"{{parcel_id}}",
+								"assign"
+							]
+						},
+						"description": "Assign a delivery agent to a parcel (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Parcel Status",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"In Transit\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/parcels/{{parcel_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels",
+								"{{parcel_id}}",
+								"status"
+							]
+						},
+						"description": "Update parcel status (agent or admin only). Statuses: Pending, Assigned, Picked Up, In Transit, Delivered, Failed"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Parcel Location",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"lat\": 23.78,\n  \"lng\": 90.41,\n  \"etaMinutes\": 30\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/parcels/{{parcel_id}}/location",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels",
+								"{{parcel_id}}",
+								"location"
+							]
+						},
+						"description": "Update current location and ETA (assigned agent only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Parcel",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/parcels/{{parcel_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels",
+								"{{parcel_id}}"
+							]
+						},
+						"description": "Delete a parcel (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Public Track Parcel",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/parcels/track/{{tracking_code}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"parcels",
+								"track",
+								"{{tracking_code}}"
+							]
+						},
+						"description": "Public tracking endpoint (no authentication required)"
+					},
+					"response": []
+				}
+			],
+			"description": "Complete parcel management endpoints including CRUD operations, agent assignment, status updates, and location tracking"
+		},
+		{
+			"name": "User Management",
+			"item": [
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"me"
+							]
+						},
+						"description": "Get current authenticated user information"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Get all users in the system (admin only)"
+					},
+					"response": []
+				}
+			],
+			"description": "User management endpoints for getting user information"
+		},
+		{
+			"name": "Analytics & Reports",
+			"item": [
+				{
+					"name": "Dashboard Metrics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/dashboard",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"analytics",
+								"dashboard"
+							]
+						},
+						"description": "Get dashboard metrics including daily bookings, failed deliveries, and COD amounts (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Export CSV Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/export/csv",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"analytics",
+								"export",
+								"csv"
+							]
+						},
+						"description": "Export parcel data to CSV format (admin only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/export/pdf",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"analytics",
+								"export",
+								"pdf"
+							]
+						},
+						"description": "Export parcel data to PDF format (admin only)"
+					},
+					"response": []
+				}
+			],
+			"description": "Analytics and reporting endpoints for dashboard metrics and data exports"
+		},
+		{
+			"name": "Agent Assignment",
+			"item": [
+				{
+					"name": "Get Available Agents",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/assignments/agents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"assignments",
+								"agents"
+							]
+						},
+						"description": "Get list of available delivery agents (admin only)"
+					},
+					"response": []
+				}
+			],
+			"description": "Agent assignment endpoints for managing delivery agent assignments"
+		},
+		{
+			"name": "Geocoding",
+			"item": [
+				{
+					"name": "Search Address",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/geocode/search?q={{address_query}}&limit=5",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"geocode",
+								"search"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "{{address_query}}",
+									"description": "Address to search for"
+								},
+								{
+									"key": "limit",
+									"value": "5",
+									"description": "Maximum number of results (default: 1)"
+								}
+							]
+						},
+						"description": "Search for addresses using OpenStreetMap Nominatim geocoding service (no authentication required)"
+					},
+					"response": []
+				}
+			],
+			"description": "Geocoding endpoints for address search and coordinate lookup"
+		},
+		{
+			"name": "System Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "System health check endpoint (no authentication required)"
+					},
+					"response": []
+				}
+			],
+			"description": "System health and monitoring endpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-set auth token if available",
+					"if (pm.environment.get('auth_token')) {",
+					"    pm.request.headers.add({",
+					"        key: 'Authorization',",
+					"        value: 'Bearer ' + pm.environment.get('auth_token')",
+					"    });",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-save auth token from login response",
+					"if (pm.response.code === 200 && pm.request.url.path.includes('/auth/login')) {",
+					"    const response = pm.response.json();",
+					"    if (response.token) {",
+					"        pm.environment.set('auth_token', response.token);",
+					"        console.log('Auth token saved automatically');",
+					"        console.log('Auth token saved automatically');",
+					"    }",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string",
+			"description": "Base URL for the API server"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string",
+			"description": "JWT authentication token (auto-filled after login)"
+		},
+		{
+			"key": "parcel_id",
+			"value": "",
+			"type": "string",
+			"description": "Parcel ID for testing specific parcel operations"
+		},
+		{
+			"key": "agent_id",
+			"value": "",
+			"type": "string",
+			"description": "Agent ID for testing agent assignment"
+		},
+		{
+			"key": "tracking_code",
+			"value": "",
+			"type": "string",
+			"description": "Tracking code for testing public tracking"
+		},
+		{
+			"key": "address_query",
+			"value": "New York, NY",
+			"type": "string",
+			"description": "Address query for geocoding tests"
+		}
+	]
+}

@@ -26,22 +26,16 @@ export default function PublicTrack() {
       .catch(() => setError('Failed to load parcel'))
       .finally(() => setLoading(false));
   }, [trackingCode]);
-
-  // Socket.IO integration for real-time updates
+ 
   useEffect(() => {
-    if (!parcel) return;
-
-    // Subscribe to updates for this specific parcel
-    socket.emit('subscribe:parcel', parcel._id);
-
-    // Listen for parcel updates (status changes, agent assignments, etc.)
+    if (!parcel) return; 
+    socket.emit('subscribe:parcel', parcel._id); 
     const handleParcelUpdate = (updatedParcel) => {
       if (updatedParcel.id === parcel._id) {
         setParcel(prev => ({ ...prev, ...updatedParcel }));
       }
     };
-
-    // Listen for agent location updates
+ 
     const handleLocationUpdate = (data) => {
       if (data.id === parcel._id) {
         setParcel(prev => ({ 
@@ -51,8 +45,7 @@ export default function PublicTrack() {
         }));
       }
     };
-
-    // Listen for agent location updates from socket events
+ 
     const handleAgentLocationUpdate = (data) => {
       if (parcel.agent && data.agentId === parcel.agent._id) {
         setParcel(prev => ({ 
