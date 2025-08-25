@@ -229,6 +229,18 @@ export default function ParcelDetailView() {
     });
   }, [parcel?._id, agentId, routeData, calculateDistance, t.failedToSendLocation, t.failedToGetCurrentLocation]);
 
+  // Set up interval to send location every 20 seconds
+  useEffect(() => {
+    if (!parcel?._id) return;
+    
+    const intervalId = setInterval(() => {
+      sendCurrentLocation();
+    }, 20000); // 20 seconds = 20000 milliseconds
+    
+    // Clean up interval on component unmount or when parcel changes
+    return () => clearInterval(intervalId);
+  }, [parcel?._id, sendCurrentLocation]);
+
   const sendCustomLocation = useCallback(async () => {
     if (!locationInput.trim() || !parcel?._id) return;
     setSendingLocation(true);
