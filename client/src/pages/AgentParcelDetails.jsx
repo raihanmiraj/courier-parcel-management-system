@@ -84,28 +84,128 @@ export default function AgentParcelDetails() {
   useEffect(() => {
     if (!parcel?._id || !parcel?.agent?._id) return;
     
-    const socketUserId = `admin:${user?._id}:${Date.now()}`;
+    const socketUserId = `agent-tracking:${user?._id}:${parcel.agent._id}:${Date.now()}`;
     const s = createSocket(socketUserId);
     socketRef.current = s;
 
     const handleAgentLocationUpdate = (data) => {
+      console.log('AgentParcelDetails: Agent location update received:', data);
       if (data.agentId === parcel.agent._id) {
         const newLocation = {
           lat: data.location.lat,
           lng: data.location.lng,
-          updatedAt: data.timestamp
+          updatedAt: data.timestamp || new Date().toISOString()
         };
+        console.log('AgentParcelDetails: Setting new agent location:', newLocation);
         setAgentLocation(newLocation);
+        
+        // If map is ready, update the agent marker immediately
+        if (mapRef.current && mapInitialized) {
+          updateAgentMarkerOnMap(newLocation);
+        }
       }
     };
 
+    const handleSocketConnect = () => {
+      console.log('AgentParcelDetails: Socket connected for agent tracking');
+    };
+
+    const handleSocketDisconnect = (reason) => {
+      console.log('AgentParcelDetails: Socket disconnected:', reason);
+    };
+
+    const handleSocketError = (error) => {
+      console.error('AgentParcelDetails: Socket error:', error);
+    };
+
+    s.on('connect', handleSocketConnect);
+    s.on('disconnect', handleSocketDisconnect);
+    s.on('connect_error', handleSocketError);
     s.on('agent:location:update', handleAgentLocationUpdate);
 
     return () => {
+      s.off('connect', handleSocketConnect);
+      s.off('disconnect', handleSocketDisconnect);
+      s.off('connect_error', handleSocketError);
       s.off('agent:location:update', handleAgentLocationUpdate);
       s.disconnect();
     };
-  }, [parcel?._id, parcel?.agent?._id, user?._id]);
+  }, [parcel?._id, parcel?.agent?._id, user?._id, mapInitialized]);
+
+  // Function to update agent marker on map
+  const updateAgentMarkerOnMap = useCallback((location) => {
+    console.log('AgentParcelDetails: updateAgentMarkerOnMap called with:', location);
+    console.log('AgentParcelDetails: Map state:', {
+      mapRef: !!mapRef.current,
+      mapInitialized,
+      mapError
+    });
+
+    if (!mapRef.current || !mapInitialized) {
+      console.log('AgentParcelDetails: Map not ready, cannot update agent marker');
+      return;
+    }
+
+    if (!location || !location.lat || !location.lng) {
+      console.log('AgentParcelDetails: Invalid location data:', location);
+      return;
+    }
+
+    const map = mapRef.current;
+    const locationArray = [location.lat, location.lng];
+
+    try {
+      console.log('AgentParcelDetails: Updating agent marker at:', locationArray);
+      
+      const bikeIcon = L.divIcon({
+        html: '🏍️',
+        className: '',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      });
+
+      if (!agentMarkerRef.current) {
+        console.log('AgentParcelDetails: Creating new agent marker');
+        agentMarkerRef.current = L.marker(locationArray, { icon: bikeIcon }).addTo(map);
+        if (parcel?.agent) {
+          agentMarkerRef.current.bindPopup(`
+            <div class="text-center">
+              <div class="font-semibold">🚚 ${parcel.agent.name}</div>
+              <div class="text-sm text-gray-600">Delivery Agent</div>
+              <div class="text-xs text-gray-500">Last updated: ${new Date(location.updatedAt).toLocaleTimeString()}</div>
+              <div class="text-xs text-gray-500">Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}</div>
+            </div>
+          `);
+        }
+      } else {
+        console.log('AgentParcelDetails: Updating existing agent marker');
+        agentMarkerRef.current.setLatLng(locationArray);
+        
+        // Update popup content with new timestamp
+        if (parcel?.agent) {
+          agentMarkerRef.current.bindPopup(`
+            <div class="text-center">
+              <div class="font-semibold">🚚 ${parcel.agent.name}</div>
+              <div class="text-sm text-gray-600">Delivery Agent</div>
+              <div class="text-xs text-gray-500">Last updated: ${new Date(location.updatedAt).toLocaleTimeString()}</div>
+              <div class="text-xs text-gray-500">Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}</div>
+            </div>
+          `);
+        }
+      }
+
+      // Ensure the agent location is visible on the map
+      const bounds = map.getBounds();
+      if (!bounds.contains(locationArray)) {
+        console.log('AgentParcelDetails: Panning map to agent location');
+        map.panTo(locationArray, { animate: true });
+      }
+      
+      console.log('AgentParcelDetails: Agent marker updated successfully');
+    } catch (err) {
+      console.error('AgentParcelDetails: Error updating agent marker:', err);
+    }
+  }, [parcel?.agent, mapInitialized]);
 
   // Update parcel status
   const updateStatus = useCallback(async () => {
@@ -137,13 +237,31 @@ export default function AgentParcelDetails() {
     }
   }, []);
 
-  // Initialize map with proper error handling
+  // Initialize map with proper error handling and multiple fallback mechanisms
   const initializeMap = useCallback(() => {
-    if (!mapElRef.current || mapRef.current) return;
+    console.log('AgentParcelDetails: initializeMap called', {
+      mapElRef: !!mapElRef.current,
+      mapRef: !!mapRef.current,
+      mapElRefCurrent: mapElRef.current
+    });
+
+    if (!mapElRef.current || mapRef.current) {
+      console.log('AgentParcelDetails: Map already exists or container not ready');
+      return;
+    }
+
+    // Check if the container is properly rendered and has dimensions
+    const container = mapElRef.current;
+    if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+      console.log('AgentParcelDetails: Container has no dimensions, retrying...');
+      setTimeout(() => initializeMap(), 200);
+      return;
+    }
 
     try {
+      console.log('AgentParcelDetails: Creating Leaflet map');
       const defaultCenter = [23.78, 90.41]; // Default to Dhaka, Bangladesh
-      const map = L.map(mapElRef.current).setView(defaultCenter, 10);
+      const map = L.map(container).setView(defaultCenter, 10);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -153,19 +271,103 @@ export default function AgentParcelDetails() {
       mapRef.current = map;
       setMapInitialized(true);
       setMapError('');
+      console.log('AgentParcelDetails: Map initialized successfully');
+      
+      // If we have agent location data, add it to the map immediately
+      if (agentLocation && agentLocation.lat && agentLocation.lng) {
+        console.log('AgentParcelDetails: Adding initial agent location to map');
+        updateAgentMarkerOnMap(agentLocation);
+      }
+      
     } catch (err) {
-      console.error('Map initialization failed:', err);
-      setMapError('Failed to initialize map');
+      console.error('AgentParcelDetails: Map initialization failed:', err);
+      setMapError('Failed to initialize map: ' + err.message);
+      
+      // Try to recover by attempting again after a delay
+      setTimeout(() => {
+        if (!mapRef.current && mapElRef.current) {
+          console.log('AgentParcelDetails: Retrying map initialization after error');
+          initializeMap();
+        }
+      }, 1000);
     }
-  }, []);
+  }, [agentLocation, updateAgentMarkerOnMap]);
 
   // Initialize map when component mounts
   useEffect(() => {
+    // Wait for the component to be fully rendered
     const timer = setTimeout(() => {
+      console.log('AgentParcelDetails: Component mounted, attempting map initialization');
       initializeMap();
     }, 100);
+    
+    // Also try with requestAnimationFrame for better timing
+    const rafId = requestAnimationFrame(() => {
+      if (!mapRef.current && mapElRef.current) {
+        console.log('AgentParcelDetails: RAF map initialization attempt');
+        initializeMap();
+      }
+    });
+    
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(rafId);
+    };
+  }, [initializeMap]);
 
-    return () => clearTimeout(timer);
+  // Monitor map container element and retry initialization if needed
+  useEffect(() => {
+    const checkAndInitialize = () => {
+      if (mapElRef.current && !mapRef.current) {
+        console.log('AgentParcelDetails: Map container found, initializing map');
+        initializeMap();
+      }
+    };
+
+    // Check immediately
+    checkAndInitialize();
+    
+    // Check again after a short delay
+    const timer = setTimeout(checkAndInitialize, 100);
+    
+    // Use ResizeObserver to detect when container is properly sized
+    let resizeObserver = null;
+    if (mapElRef.current && window.ResizeObserver) {
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect.width > 0 && entry.contentRect.height > 0 && !mapRef.current) {
+            console.log('AgentParcelDetails: Container resized, attempting map initialization');
+            initializeMap();
+          }
+        }
+      });
+      resizeObserver.observe(mapElRef.current);
+    }
+    
+    return () => {
+      clearTimeout(timer);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+    };
+  }, [initializeMap]);
+
+  // Fallback map initialization with multiple attempts
+  useEffect(() => {
+    const timers = [];
+    
+    // Multiple fallback attempts at different intervals
+    [500, 1000, 2000].forEach(delay => {
+      const timer = setTimeout(() => {
+        if (mapElRef.current && !mapRef.current) {
+          console.log(`AgentParcelDetails: Fallback map initialization attempt at ${delay}ms`);
+          initializeMap();
+        }
+      }, delay);
+      timers.push(timer);
+    });
+    
+    return () => timers.forEach(timer => clearTimeout(timer));
   }, [initializeMap]);
 
   // Create route when parcel data is available
@@ -255,45 +457,13 @@ export default function AgentParcelDetails() {
     }
   }, [routeData, mapInitialized]);
 
-  // Update agent marker
+  // Update agent marker when location changes (fallback for initial load)
   useEffect(() => {
     if (!agentLocation?.lat || !agentLocation?.lng || !mapRef.current || !mapInitialized) return;
-
-    const map = mapRef.current;
-    const location = [agentLocation.lat, agentLocation.lng];
-
-    try {
-      const bikeIcon = L.divIcon({
-        html: '🏍️',
-        className: '',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-
-      if (!agentMarkerRef.current) {
-        agentMarkerRef.current = L.marker(location, { icon: bikeIcon }).addTo(map);
-        if (parcel?.agent) {
-          agentMarkerRef.current.bindPopup(`
-            <div class="text-center">
-              <div class="font-semibold">🚚 ${parcel.agent.name}</div>
-              <div class="text-sm text-gray-600">Delivery Agent</div>
-              <div class="text-xs text-gray-500">Last updated: ${new Date(agentLocation.updatedAt).toLocaleTimeString()}</div>
-            </div>
-          `);
-        }
-      } else {
-        agentMarkerRef.current.setLatLng(location);
-      }
-
-      // Pan to agent location if not visible
-      const bounds = map.getBounds();
-      if (!bounds.contains(location)) {
-        map.panTo(location, { animate: true });
-      }
-    } catch (err) {
-      console.error('Error updating agent marker:', err);
-    }
-  }, [agentLocation, parcel?.agent, mapInitialized]);
+    
+    // Use the dedicated function to update the marker
+    updateAgentMarkerOnMap(agentLocation);
+  }, [agentLocation, mapInitialized, updateAgentMarkerOnMap]);
 
   // Cleanup function
   useEffect(() => {
@@ -371,6 +541,28 @@ export default function AgentParcelDetails() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* Real-time Tracking Status */}
+              {agentLocation && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-50 rounded-full border border-green-200">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-green-800">Live Tracking</span>
+                </div>
+              )}
+              
+              {/* Socket Connection Status */}
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs ${
+                socketRef.current?.connected 
+                  ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                  : 'bg-gray-50 border-gray-200 text-gray-600'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  socketRef.current?.connected ? 'bg-blue-500' : 'bg-gray-400'
+                }`}></div>
+                <span className="font-medium">
+                  {socketRef.current?.connected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+              
               <select 
                 value={status} 
                 onChange={(e) => setStatus(e.target.value)}
@@ -508,14 +700,129 @@ export default function AgentParcelDetails() {
                   )}
                 </div>
                 {agentLocation && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm font-medium text-blue-800">{t.liveTrackingActive}</span>
+                  <div className="mt-4 space-y-3">
+                    {/* Live Tracking Status */}
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium text-blue-800">{t.liveTrackingActive}</span>
+                      </div>
+                      <p className="text-xs text-blue-600 mt-1">
+                        {t.agentLocationUpdated}: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
+                      </p>
                     </div>
-                    <p className="text-xs text-blue-600 mt-1">
-                      {t.agentLocationUpdated}: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
-                    </p>
+                    
+                    {/* Agent Location Coordinates */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <label className="text-xs font-medium text-green-600 uppercase tracking-wide">Latitude</label>
+                        <p className="text-lg font-bold text-green-900">{agentLocation.lat.toFixed(6)}</p>
+                      </div>
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <label className="text-xs font-medium text-green-600 uppercase tracking-wide">Longitude</label>
+                        <p className="text-lg font-bold text-green-900">{agentLocation.lng.toFixed(6)}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Real-time Updates Info */}
+                    <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-medium text-purple-800">Real-time Updates Active</span>
+                      </div>
+                      <p className="text-xs text-purple-600 mt-1">
+                        Agent location updates automatically via WebSocket connection
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* No Location Status */}
+                {!agentLocation && (
+                  <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">📍</div>
+                      <p className="text-sm font-medium text-yellow-800">Waiting for Agent Location</p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        Agent location will appear here when they share their position
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Debug Information for Development */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <details className="text-xs">
+                      <summary className="cursor-pointer font-medium text-gray-700">Debug Info</summary>
+                      <div className="mt-2 space-y-1 text-gray-600">
+                        <div>Map Initialized: {mapInitialized ? '✅' : '❌'}</div>
+                        <div>Map Element: {mapElRef.current ? '✅' : '❌'}</div>
+                        <div>Map Instance: {mapRef.current ? '✅' : '❌'}</div>
+                        <div>Map Error: {mapError || 'None'}</div>
+                        <div>Agent Location: {agentLocation ? '✅' : '❌'}</div>
+                        <div>Socket Connected: {socketRef.current?.connected ? '✅' : '❌'}</div>
+                        {agentLocation && (
+                          <div>
+                            Last Update: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
+                          </div>
+                        )}
+                        {routeData && (
+                          <div>
+                            Route Data: ✅ Pickup & Delivery coordinates loaded
+                          </div>
+                        )}
+                        
+                        <div className="mt-3 pt-3 border-t border-gray-300">
+                          <button 
+                            onClick={() => {
+                              console.log('Manual map initialization triggered');
+                              if (mapElRef.current && !mapRef.current) {
+                                initializeMap();
+                              } else {
+                                console.log('Map already exists or container not ready');
+                              }
+                            }}
+                            className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 mr-2"
+                          >
+                            Init Map
+                          </button>
+                          <button 
+                            onClick={() => {
+                              console.log('Force map re-initialization');
+                              if (mapRef.current) {
+                                try {
+                                  mapRef.current.remove();
+                                  mapRef.current = null;
+                                  setMapInitialized(false);
+                                } catch (_) { }
+                              }
+                              setTimeout(() => initializeMap(), 100);
+                            }}
+                            className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 mr-2"
+                          >
+                            Reset Map
+                          </button>
+                          <button 
+                            onClick={() => {
+                              console.log('Test agent location update');
+                              if (agentLocation) {
+                                const testLocation = {
+                                  ...agentLocation,
+                                  updatedAt: new Date().toISOString()
+                                };
+                                setAgentLocation(testLocation);
+                                updateAgentMarkerOnMap(testLocation);
+                              }
+                            }}
+                            className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                            disabled={!agentLocation}
+                          >
+                            Test Update
+                          </button>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>

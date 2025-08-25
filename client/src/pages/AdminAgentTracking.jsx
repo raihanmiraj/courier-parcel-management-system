@@ -7,8 +7,6 @@ import { getTranslations } from '../translations';
 import { createSocket } from '../socket';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet-routing-machine';
-import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
 // Fix default marker icons in bundlers like Vite
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -23,11 +21,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// Check if routing plugin is loaded
-console.log('Leaflet version:', L.version);
-console.log('Leaflet Routing plugin available:', typeof L.Routing !== 'undefined');
-console.log('L.Routing object:', L.Routing);
-
 export default function AdminAgentTracking() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -39,22 +32,18 @@ export default function AdminAgentTracking() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [agentLocation, setAgentLocation] = useState(null);
-  const [mapInitialized, setMapInitialized] = useState(false);
-  const [mapError, setMapError] = useState('');
   const [agentSpeed, setAgentSpeed] = useState(null);
   const [previousAgentLocation, setPreviousAgentLocation] = useState(null);
   const [lastLocationUpdate, setLastLocationUpdate] = useState(null);
   const [agentParcels, setAgentParcels] = useState([]);
-  const [selectedParcel, setSelectedParcel] = useState(null);
-  const [routeData, setRouteData] = useState(null);
+  const [parcelsLoading, setParcelsLoading] = useState(false);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [mapError, setMapError] = useState('');
 
+  const socketRef = useRef(null);
   const mapRef = useRef(null);
   const mapElRef = useRef(null);
-  const routingRef = useRef(null);
   const agentMarkerRef = useRef(null);
-  const pickupMarkerRef = useRef(null);
-  const deliveryMarkerRef = useRef(null);
-  const socketRef = useRef(null);
 
   // Calculate distance between two points using Haversine formula
   const calculateDistance = useCallback((point1, point2) => {
@@ -83,6 +72,109 @@ export default function AdminAgentTracking() {
     return speed > 0 && speed <= 120 ? speed : null;
   }, [calculateDistance]);
 
+  // Function to update agent marker on map
+  const updateAgentMarkerOnMap = useCallback((location) => {
+    if (!mapRef.current || !mapInitialized) {
+      return;
+    }
+
+    if (!location || !location.lat || !location.lng) {
+      return;
+    }
+
+    const map = mapRef.current;
+    const locationArray = [location.lat, location.lng];
+
+    try {
+      const bikeIcon = L.divIcon({
+        html: '🏍️',
+        className: '',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      });
+
+      if (!agentMarkerRef.current) {
+        agentMarkerRef.current = L.marker(locationArray, { icon: bikeIcon }).addTo(map);
+        if (selectedAgent) {
+          agentMarkerRef.current.bindPopup(`
+            <div class="text-center">
+              <div class="font-semibold">🚚 ${selectedAgent.name}</div>
+              <div class="text-sm text-gray-600">Delivery Agent</div>
+              <div class="text-xs text-gray-500">Last updated: ${new Date(location.updatedAt).toLocaleTimeString()}</div>
+              <div class="text-xs text-gray-500">Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}</div>
+            </div>
+          `);
+        }
+      } else {
+        agentMarkerRef.current.setLatLng(locationArray);
+        
+        // Update popup content with new timestamp
+        if (selectedAgent) {
+          agentMarkerRef.current.bindPopup(`
+            <div class="text-center">
+              <div class="font-semibold">🚚 ${selectedAgent.name}</div>
+              <div class="text-sm text-gray-600">Delivery Agent</div>
+              <div class="text-xs text-gray-500">Last updated: ${new Date(location.updatedAt).toLocaleTimeString()}</div>
+              <div class="text-xs text-gray-500">Location: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}</div>
+            </div>
+          `);
+        }
+      }
+
+      // Ensure the agent location is visible on the map
+      const bounds = map.getBounds();
+      if (!bounds.contains(locationArray)) {
+        map.panTo(locationArray, { animate: true });
+      }
+    } catch (err) {
+      console.error('Error updating agent marker:', err);
+    }
+  }, [selectedAgent, mapInitialized]);
+
+  // Initialize map with proper error handling
+  const initializeMap = useCallback(() => {
+    if (!mapElRef.current || mapRef.current) {
+      return;
+    }
+
+    // Check if the container is properly rendered and has dimensions
+    const container = mapElRef.current;
+    if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+      setTimeout(() => initializeMap(), 200);
+      return;
+    }
+
+    try {
+      const defaultCenter = [23.78, 90.41]; // Default to Dhaka, Bangladesh
+      const map = L.map(container).setView(defaultCenter, 10);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      mapRef.current = map;
+      setMapInitialized(true);
+      setMapError('');
+      
+      // If we have agent location data, add it to the map immediately
+      if (agentLocation && agentLocation.lat && agentLocation.lng) {
+        updateAgentMarkerOnMap(agentLocation);
+      }
+      
+    } catch (err) {
+      console.error('Map initialization failed:', err);
+      setMapError('Failed to initialize map: ' + err.message);
+      
+      // Try to recover by attempting again after a delay
+      setTimeout(() => {
+        if (!mapRef.current && mapElRef.current) {
+          initializeMap();
+        }
+      }, 1000);
+    }
+  }, [agentLocation, updateAgentMarkerOnMap]);
+
   // Load agents
   useEffect(() => {
     setLoading(true);
@@ -101,14 +193,18 @@ export default function AdminAgentTracking() {
   useEffect(() => {
     if (!selectedAgent) return;
     
+    setParcelsLoading(true);
+    setAgentLocation(null);
+    setAgentSpeed(null);
+    setPreviousAgentLocation(null);
+    setLastLocationUpdate(null);
+    
     api.get(`/parcels?agent=${selectedAgent._id}`)
       .then(res => {
         setAgentParcels(res.data);
-        if (res.data.length > 0) {
-          setSelectedParcel(res.data[0]);
-        }
       })
-      .catch(() => setError('Failed to load agent parcels'));
+      .catch(() => setError('Failed to load agent parcels'))
+      .finally(() => setParcelsLoading(false));
   }, [selectedAgent]);
 
   // Initialize socket for real-time tracking
@@ -139,6 +235,11 @@ export default function AdminAgentTracking() {
         setPreviousAgentLocation(agentLocation);
         setAgentLocation(newLocation);
         setLastLocationUpdate(new Date(data.timestamp));
+        
+        // Update map marker if map is ready
+        if (mapRef.current && mapInitialized) {
+          updateAgentMarkerOnMap(newLocation);
+        }
       }
     };
 
@@ -148,319 +249,95 @@ export default function AdminAgentTracking() {
       s.off('agent:location:update', handleAgentLocationUpdate);
       s.disconnect();
     };
-  }, [selectedAgent, user?._id, agentLocation, lastLocationUpdate, calculateAgentSpeed]);
-
-  // Geocode addresses
-  const geocodeAddress = useCallback(async (query) => {
-    try {
-      console.log('Geocoding address:', query);
-      const { data } = await api.get('/geocode/search', {
-        params: { q: query, limit: 1 }
-      });
-      
-      console.log('Geocoding response:', data);
-      
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('Address not found');
-      }
-      
-      const { lat, lon } = data[0];
-      const coordinates = [parseFloat(lat), parseFloat(lon)];
-      
-      console.log('Geocoded coordinates:', coordinates);
-      return coordinates;
-    } catch (err) {
-      console.error('Geocoding failed for:', query, err);
-      throw new Error(`Failed to geocode address "${query}": ${err.message}`);
-    }
-  }, []);
-
-  // Create route when parcel changes
-  useEffect(() => {
-    if (!selectedParcel) return;
-
-    const createRoute = async () => {
-      try {
-        console.log('Creating route for parcel:', selectedParcel.trackingCode);
-        const pickup = await geocodeAddress(selectedParcel.pickupAddress);
-        const delivery = await geocodeAddress(selectedParcel.deliveryAddress);
-        console.log('Route coordinates:', { pickup, delivery });
-        setRouteData({ pickup, delivery });
-      } catch (err) {
-        console.error('Route creation failed:', err);
-        setMapError('Failed to create route: ' + err.message);
-      }
-    };
-
-    createRoute();
-  }, [selectedParcel, geocodeAddress]);
-
-  // Initialize map with proper error handling
-  const initializeMap = useCallback(() => {
-    if (!mapElRef.current || mapRef.current) return;
-
-    try {
-      console.log('Initializing map...');
-      const defaultCenter = [23.78, 90.41]; // Default to Dhaka, Bangladesh
-      const map = L.map(mapElRef.current).setView(defaultCenter, 10);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 18,
-      }).addTo(map);
-
-      mapRef.current = map;
-      setMapInitialized(true);
-      setMapError('');
-      console.log('Map initialized successfully');
-    } catch (err) {
-      console.error('Map initialization failed:', err);
-      setMapError('Failed to initialize map');
-    }
-  }, []);
+  }, [selectedAgent, user?._id, agentLocation, lastLocationUpdate, calculateAgentSpeed, mapInitialized, updateAgentMarkerOnMap]);
 
   // Initialize map when component mounts
   useEffect(() => {
+    // Wait for the component to be fully rendered
     const timer = setTimeout(() => {
-      if (mapElRef.current) {
-        console.log('Map container ready, initializing...');
-        console.log('Map container dimensions:', {
-          width: mapElRef.current.offsetWidth,
-          height: mapElRef.current.offsetHeight,
-          visible: mapElRef.current.offsetParent !== null
-        });
+      initializeMap();
+    }, 100);
+    
+    // Also try with requestAnimationFrame for better timing
+    const rafId = requestAnimationFrame(() => {
+      if (!mapRef.current && mapElRef.current) {
         initializeMap();
-      } else {
-        console.log('Map container not ready yet');
       }
-    }, 200); // Increased timeout for better DOM readiness
-
-    return () => clearTimeout(timer);
+    });
+    
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(rafId);
+    };
   }, [initializeMap]);
 
-  // Monitor map container element
+  // Monitor map container element and retry initialization if needed
   useEffect(() => {
-    const checkContainer = () => {
-      if (mapElRef.current) {
-        console.log('Map container found:', {
-          element: mapElRef.current,
-          tagName: mapElRef.current.tagName,
-          className: mapElRef.current.className,
-          dimensions: {
-            width: mapElRef.current.offsetWidth,
-            height: mapElRef.current.offsetHeight
-          }
-        });
-      } else {
-        console.log('Map container not found yet');
+    const checkAndInitialize = () => {
+      if (mapElRef.current && !mapRef.current) {
+        initializeMap();
       }
     };
 
     // Check immediately
-    checkContainer();
+    checkAndInitialize();
     
     // Check again after a short delay
-    const timer = setTimeout(checkContainer, 100);
+    const timer = setTimeout(checkAndInitialize, 100);
     
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Initialize map when no parcel is selected (show default view)
-  useEffect(() => {
-    if (!selectedParcel && mapRef.current && mapInitialized) {
-      console.log('No parcel selected, showing default map view');
-      const map = mapRef.current;
-      
-      // Set a default view
-      map.setView([23.78, 90.41], 10);
-      
-      // Clear any existing routes or markers
-      if (routingRef.current) {
-        map.removeControl(routingRef.current);
-        routingRef.current = null;
-      }
-      if (pickupMarkerRef.current) {
-        map.removeLayer(pickupMarkerRef.current);
-        pickupMarkerRef.current = null;
-      }
-      if (deliveryMarkerRef.current) {
-        map.removeLayer(deliveryMarkerRef.current);
-        deliveryMarkerRef.current = null;
-      }
-    }
-  }, [selectedParcel, mapInitialized]);
-
-  // Create route on map
-  useEffect(() => {
-    if (!routeData || !mapRef.current || !mapInitialized) {
-      console.log('Route creation skipped:', { 
-        hasRouteData: !!routeData, 
-        hasMap: !!mapRef.current, 
-        mapInitialized 
-      });
-      return;
-    }
-
-    const map = mapRef.current;
-    const { pickup, delivery } = routeData;
-
-    try {
-      console.log('Creating route on map:', { pickup, delivery });
-      
-      // Clean up existing routing control
-      if (routingRef.current) {
-        map.removeControl(routingRef.current);
-        routingRef.current = null;
-      }
-
-      // Clean up existing markers
-      if (pickupMarkerRef.current) {
-        map.removeLayer(pickupMarkerRef.current);
-        pickupMarkerRef.current = null;
-      }
-      if (deliveryMarkerRef.current) {
-        map.removeLayer(deliveryMarkerRef.current);
-        deliveryMarkerRef.current = null;
-      }
-
-      // Create custom markers
-      const pickupIcon = L.divIcon({
-        html: '📍',
-        className: '',
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
-      });
-      const deliveryIcon = L.divIcon({
-        html: '🎯',
-        className: '',
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
-      });
-
-      // Add markers to map
-      pickupMarkerRef.current = L.marker(pickup, { icon: pickupIcon }).addTo(map);
-      deliveryMarkerRef.current = L.marker(delivery, { icon: deliveryIcon }).addTo(map);
-
-      // Create routing control
-      try {
-        // Check if routing plugin is available
-        if (typeof L.Routing === 'undefined') {
-          throw new Error('Routing plugin not loaded');
-        }
-        
-        routingRef.current = L.Routing.control({
-          waypoints: [
-            L.latLng(pickup[0], pickup[1]),
-            L.latLng(delivery[0], delivery[1])
-          ],
-          router: L.Routing.osrmv1({
-            serviceUrl: 'https://router.project-osrm.org/route/v1'
-          }),
-          addWaypoints: false,
-          draggableWaypoints: false,
-          fitSelectedRoutes: true,
-          show: false,
-          lineOptions: { 
-            styles: [{ color: '#2563eb', opacity: 0.8, weight: 4 }] 
+    // Use ResizeObserver to detect when container is properly sized
+    let resizeObserver = null;
+    if (mapElRef.current && window.ResizeObserver) {
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect.width > 0 && entry.contentRect.height > 0 && !mapRef.current) {
+            initializeMap();
           }
-        }).addTo(map);
-        
-        console.log('Routing control created successfully');
-      } catch (routingErr) {
-        console.error('Routing control creation failed:', routingErr);
-        // Fallback: create a simple polyline instead of routing control
-        try {
-          const polyline = L.polyline([pickup, delivery], {
-            color: '#2563eb',
-            weight: 4,
-            opacity: 0.8
-          }).addTo(map);
-          
-          // Store reference for cleanup
-          routingRef.current = { 
-            remove: () => map.removeLayer(polyline),
-            _isPolyline: true 
-          };
-          
-          console.log('Fallback polyline created instead of routing control');
-        } catch (polylineErr) {
-          console.error('Fallback polyline creation also failed:', polylineErr);
-          setMapError('Failed to create route visualization');
         }
-      }
-
-      // Fit map to show both points
-      const bounds = L.latLngBounds([pickup, delivery]);
-      map.fitBounds(bounds, { padding: [50, 50] });
-      
-      console.log('Route created successfully on map');
-    } catch (err) {
-      console.error('Error creating route on map:', err);
-      setMapError('Failed to display route on map');
+      });
+      resizeObserver.observe(mapElRef.current);
     }
-  }, [routeData, mapInitialized]);
+    
+    return () => {
+      clearTimeout(timer);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+    };
+  }, [initializeMap]);
 
-  // Update agent marker
+  // Update agent marker when location changes (fallback for initial load)
   useEffect(() => {
     if (!agentLocation?.lat || !agentLocation?.lng || !mapRef.current || !mapInitialized) return;
+    
+    // Use the dedicated function to update the marker
+    updateAgentMarkerOnMap(agentLocation);
+  }, [agentLocation, mapInitialized, updateAgentMarkerOnMap]);
 
-    const map = mapRef.current;
-    const location = [agentLocation.lat, agentLocation.lng];
-
-    try {
-      const bikeIcon = L.divIcon({
-        html: '🏍️',
-        className: '',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-
-      if (!agentMarkerRef.current) {
-        agentMarkerRef.current = L.marker(location, { icon: bikeIcon }).addTo(map);
-        if (selectedAgent) {
-          agentMarkerRef.current.bindPopup(`
-            <div class="text-center">
-              <div class="font-semibold">🚚 ${selectedAgent.name}</div>
-              <div class="text-sm text-gray-600">Delivery Agent</div>
-              <div class="text-xs text-gray-500">Last updated: ${new Date(agentLocation.updatedAt).toLocaleTimeString()}</div>
-            </div>
-          `);
+  // Fallback map initialization with multiple attempts
+  useEffect(() => {
+    const timers = [];
+    
+    // Multiple fallback attempts at different intervals
+    [500, 1000, 2000].forEach(delay => {
+      const timer = setTimeout(() => {
+        if (mapElRef.current && !mapRef.current) {
+          console.log(`Fallback map initialization attempt at ${delay}ms`);
+          initializeMap();
         }
-      } else {
-        agentMarkerRef.current.setLatLng(location);
-      }
-
-      // Pan to agent location if not visible
-      const bounds = map.getBounds();
-      if (!bounds.contains(location)) {
-        map.panTo(location, { animate: true });
-      }
-    } catch (err) {
-      console.error('Error updating agent marker:', err);
-    }
-  }, [agentLocation, selectedAgent, mapInitialized]);
+      }, delay);
+      timers.push(timer);
+    });
+    
+    return () => timers.forEach(timer => clearTimeout(timer));
+  }, [initializeMap]);
 
   // Cleanup function
   useEffect(() => {
     return () => {
       try {
-        if (routingRef.current && mapRef.current) {
-          if (routingRef.current._isPolyline) {
-            // Handle fallback polyline cleanup
-            routingRef.current.remove();
-          } else {
-            // Handle normal routing control cleanup
-            mapRef.current.removeControl(routingRef.current);
-          }
-        }
         if (agentMarkerRef.current && mapRef.current) {
           mapRef.current.removeLayer(agentMarkerRef.current);
-        }
-        if (pickupMarkerRef.current && mapRef.current) {
-          mapRef.current.removeLayer(pickupMarkerRef.current);
-        }
-        if (deliveryMarkerRef.current && mapRef.current) {
-          mapRef.current.removeLayer(deliveryMarkerRef.current);
         }
         if (mapRef.current) {
           mapRef.current.remove();
@@ -468,6 +345,9 @@ export default function AdminAgentTracking() {
         }
       } catch (err) {
         console.error('Error during cleanup:', err);
+      }
+      if (socketRef.current) {
+        socketRef.current.disconnect();
       }
     };
   }, []);
@@ -522,8 +402,8 @@ export default function AdminAgentTracking() {
           </div>
         )}
 
-        <div className="grid gap-8 lg:grid-cols-4">
-          {/* Agent Selection Sidebar */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Agent Selection and Details */}
           <div className="space-y-6">
             {/* Agent Selection */}
             <div className="bg-white rounded-xl border shadow-sm">
@@ -539,8 +419,6 @@ export default function AdminAgentTracking() {
                   onChange={(e) => {
                     const agent = agents.find(a => a._id === e.target.value);
                     setSelectedAgent(agent);
-                    setAgentLocation(null);
-                    setAgentSpeed(null);
                   }}
                   className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -579,7 +457,7 @@ export default function AdminAgentTracking() {
               </div>
             )}
 
-            {/* Agent Metrics */}
+            {/* Agent Live Metrics */}
             {selectedAgent && agentLocation && (
               <div className="bg-white rounded-xl border shadow-sm">
                 <div className="p-6 border-b">
@@ -607,44 +485,137 @@ export default function AdminAgentTracking() {
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Parcel Selection */}
-            {selectedAgent && agentParcels.length > 0 && (
+          {/* Agent Parcels List */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Parcels Assigned to Agent */}
+            <div className="bg-white rounded-xl border shadow-sm">
+              <div className="p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Parcels Assigned to Agent</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {selectedAgent ? `Showing parcels for ${selectedAgent.name}` : 'Select an agent to view parcels'}
+                </p>
+              </div>
+              <div className="p-6">
+                {!selectedAgent ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <div className="text-4xl mb-2">📦</div>
+                    <p>Please select an agent to view their assigned parcels</p>
+                  </div>
+                ) : parcelsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-600">Loading parcels...</p>
+                  </div>
+                ) : agentParcels.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <div className="text-4xl mb-2">📭</div>
+                    <p>No parcels assigned to this agent</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {agentParcels.map(parcel => (
+                      <div key={parcel._id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-semibold text-gray-900">#{parcel.trackingCode}</h3>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                parcel.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                                parcel.status === 'In Transit' ? 'bg-blue-100 text-blue-800' :
+                                parcel.status === 'Failed' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {parcel.status}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
+                              <div>
+                                <span className="font-medium">Pickup:</span> {parcel.pickupAddress}
+                              </div>
+                              <div>
+                                <span className="font-medium">Delivery:</span> {parcel.deliveryAddress}
+                              </div>
+                              <div>
+                                <span className="font-medium">Size:</span> {parcel.parcelSize}
+                              </div>
+                              <div>
+                                <span className="font-medium">Type:</span> {parcel.parcelType}
+                              </div>
+                            </div>
+                            {parcel.notes && (
+                              <div className="mt-2 text-sm text-gray-500">
+                                <span className="font-medium">Notes:</span> {parcel.notes}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right text-sm text-gray-500">
+                            <div>Created: {new Date(parcel.createdAt).toLocaleDateString()}</div>
+                            <div>Updated: {new Date(parcel.updatedAt).toLocaleDateString()}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Live Tracking Status */}
+            {selectedAgent && (
               <div className="bg-white rounded-xl border shadow-sm">
                 <div className="p-6 border-b">
-                  <h3 className="text-lg font-semibold text-gray-900">{t.activeParcels}</h3>
+                  <h2 className="text-xl font-semibold text-gray-900">Live Tracking Status</h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {t.selectParcelToViewRoute}
+                    {selectedAgent.name}'s real-time location updates
                   </p>
                 </div>
                 <div className="p-6">
-                  <select 
-                    value={selectedParcel?._id || ''} 
-                    onChange={(e) => {
-                      const parcel = agentParcels.find(p => p._id === e.target.value);
-                      setSelectedParcel(parcel);
-                    }}
-                    className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {agentParcels.map(parcel => (
-                      <option key={parcel._id} value={parcel._id}>
-                        {parcel.trackingCode} - {parcel.status}
-                      </option>
-                    ))}
-                  </select>
+                  {agentLocation ? (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                          <span className="text-sm font-medium text-blue-800">{t.liveTrackingActive}</span>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-1">
+                          {t.agentLocationUpdated}: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                          <label className="text-xs font-medium text-green-600 uppercase tracking-wide">Latitude</label>
+                          <p className="text-lg font-bold text-green-900">{agentLocation.lat.toFixed(6)}</p>
+                        </div>
+                        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                          <label className="text-xs font-medium text-green-600 uppercase tracking-wide">Longitude</label>
+                          <p className="text-lg font-bold text-green-900">{agentLocation.lng.toFixed(6)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-8">
+                      <div className="text-4xl mb-2">📍</div>
+                      <p>Waiting for location updates from agent</p>
+                      <p className="text-sm mt-1">Location will appear here when agent shares their position</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
+        </div>
 
-          {/* Map and Tracking View */}
-          <div className="lg:col-span-3 space-y-6">
-            {/* Live Tracking Map */}
+        {/* Live Agent Tracking Map */}
+        {selectedAgent && (
+          <div className="mt-8">
             <div className="bg-white rounded-xl border shadow-sm">
               <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold text-gray-900">{t.liveTrackingMap}</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Live Agent Tracking Map</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  {selectedAgent ? `${t.tracking} ${selectedAgent.name}` : t.selectAnAgentToStartTracking}
+                  Real-time location tracking of {selectedAgent.name} on the map
                 </p>
               </div>
               <div className="p-6">
@@ -667,51 +638,63 @@ export default function AdminAgentTracking() {
                       <div className="text-center text-red-600">
                         <div className="text-2xl mb-2">⚠️</div>
                         <p className="text-sm">{mapError}</p>
-                        <button 
-                          onClick={() => {
-                            setMapError('');
-                            initializeMap();
-                          }}
-                          className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {mapInitialized && !routeData && !mapError && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg bg-opacity-75">
-                      <div className="text-center text-gray-600">
-                        <div className="text-2xl mb-2">🗺️</div>
-                        <p className="text-sm">Select a parcel to view route</p>
                       </div>
                     </div>
                   )}
                 </div>
+                
                 {agentLocation && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm font-medium text-blue-800">{t.liveTrackingActive}</span>
+                  <div className="mt-4 space-y-3">
+                    {/* Live Tracking Status */}
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium text-blue-800">Live Tracking Active</span>
+                      </div>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Agent location updated: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
+                      </p>
                     </div>
-                    <p className="text-xs text-blue-600 mt-1">
-                      {t.agentLocationUpdated}: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
-                    </p>
-                  </div>
-                )}
-                {mapInitialized && routeData && (
-                  <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-green-800">Route displayed</span>
+                    
+                    {/* Agent Location Coordinates */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <label className="text-xs font-medium text-green-600 uppercase tracking-wide">Latitude</label>
+                        <p className="text-lg font-bold text-green-900">{agentLocation.lat.toFixed(6)}</p>
+                      </div>
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <label className="text-xs font-medium text-green-600 uppercase tracking-wide">Longitude</label>
+                        <p className="text-lg font-bold text-green-900">{agentLocation.lng.toFixed(6)}</p>
+                      </div>
                     </div>
-                    <p className="text-xs text-green-600 mt-1">
-                      Showing route from pickup to delivery location
-                    </p>
+                    
+                    {/* Real-time Updates Info */}
+                    <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-medium text-purple-800">Real-time Updates Active</span>
+                      </div>
+                      <p className="text-xs text-purple-600 mt-1">
+                        Agent location updates automatically via WebSocket connection
+                      </p>
+                    </div>
                   </div>
                 )}
                 
-                {/* Debug Information */}
+                {/* No Location Status */}
+                {!agentLocation && (
+                  <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">📍</div>
+                      <p className="text-sm font-medium text-yellow-800">Waiting for Agent Location</p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        Agent location will appear here when they share their position
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Debug Information for Development */}
                 {process.env.NODE_ENV === 'development' && (
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <details className="text-xs">
@@ -720,17 +703,12 @@ export default function AdminAgentTracking() {
                         <div>Map Initialized: {mapInitialized ? '✅' : '❌'}</div>
                         <div>Map Element: {mapElRef.current ? '✅' : '❌'}</div>
                         <div>Map Instance: {mapRef.current ? '✅' : '❌'}</div>
-                        <div>Route Data: {routeData ? '✅' : '❌'}</div>
-                        <div>Selected Parcel: {selectedParcel ? selectedParcel.trackingCode : 'None'}</div>
+                        <div>Map Error: {mapError || 'None'}</div>
                         <div>Agent Location: {agentLocation ? '✅' : '❌'}</div>
-                        {routeData && (
+                        <div>Socket Connected: {socketRef.current?.connected ? '✅' : '❌'}</div>
+                        {agentLocation && (
                           <div>
-                            Pickup: [{routeData.pickup?.[0]?.toFixed(6)}, {routeData.pickup?.[1]?.toFixed(6)}]
-                          </div>
-                        )}
-                        {routeData && (
-                          <div>
-                            Delivery: [{routeData.delivery?.[0]?.toFixed(6)}, {routeData.delivery?.[1]?.toFixed(6)}]
+                            Last Update: {new Date(agentLocation.updatedAt).toLocaleTimeString()}
                           </div>
                         )}
                         
@@ -740,6 +718,8 @@ export default function AdminAgentTracking() {
                               console.log('Manual map initialization triggered');
                               if (mapElRef.current && !mapRef.current) {
                                 initializeMap();
+                              } else {
+                                console.log('Map already exists or container not ready');
                               }
                             }}
                             className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 mr-2"
@@ -748,25 +728,36 @@ export default function AdminAgentTracking() {
                           </button>
                           <button 
                             onClick={() => {
-                              console.log('Manual route creation triggered');
-                              if (selectedParcel) {
-                                const createRoute = async () => {
-                                  try {
-                                    const pickup = await geocodeAddress(selectedParcel.pickupAddress);
-                                    const delivery = await geocodeAddress(selectedParcel.deliveryAddress);
-                                    setRouteData({ pickup, delivery });
-                                  } catch (err) {
-                                    console.error('Manual route creation failed:', err);
-                                    setMapError('Manual route creation failed: ' + err.message);
-                                  }
+                              console.log('Force map re-initialization');
+                              if (mapRef.current) {
+                                try {
+                                  mapRef.current.remove();
+                                  mapRef.current = null;
+                                  setMapInitialized(false);
+                                } catch (_) { }
+                              }
+                              setTimeout(() => initializeMap(), 100);
+                            }}
+                            className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 mr-2"
+                          >
+                            Reset Map
+                          </button>
+                          <button 
+                            onClick={() => {
+                              console.log('Test agent location update');
+                              if (agentLocation) {
+                                const testLocation = {
+                                  ...agentLocation,
+                                  updatedAt: new Date().toISOString()
                                 };
-                                createRoute();
+                                setAgentLocation(testLocation);
+                                updateAgentMarkerOnMap(testLocation);
                               }
                             }}
                             className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                            disabled={!selectedParcel}
+                            disabled={!agentLocation}
                           >
-                            Create Route
+                            Test Update
                           </button>
                         </div>
                       </div>
@@ -775,68 +766,8 @@ export default function AdminAgentTracking() {
                 )}
               </div>
             </div>
-
-            {/* Parcel Details */}
-            {selectedParcel && (
-              <div className="bg-white rounded-xl border shadow-sm">
-                <div className="p-6 border-b">
-                  <h2 className="text-xl font-semibold text-gray-900">Parcel Details</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Tracking #{selectedParcel.trackingCode}
-                  </p>
-                </div>
-                <div className="p-6">
-                  <div className="grid gap-6 sm:grid-cols-2">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Tracking Code</label>
-                      <p className="text-lg font-semibold text-gray-900">{selectedParcel.trackingCode}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Status</label>
-                      <p className="text-lg font-semibold text-gray-900">{selectedParcel.status}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Pickup Address</label>
-                      <p className="text-sm text-gray-900">{selectedParcel.pickupAddress}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Delivery Address</label>
-                      <p className="text-sm text-gray-900">{selectedParcel.deliveryAddress}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Parcel Size</label>
-                      <p className="text-sm text-gray-900">{selectedParcel.parcelSize}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Parcel Type</label>
-                      <p className="text-sm text-gray-900">{selectedParcel.parcelType}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Payment Type</label>
-                      <p className="text-sm text-gray-900">{selectedParcel.paymentType}</p>
-                    </div>
-                    {selectedParcel.paymentType === 'COD' && (
-                      <div>
-                        <label className="text-sm font-medium text-gray-500">COD Amount</label>
-                        <p className="text-sm text-gray-900">${selectedParcel.codAmount}</p>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Created Date</label>
-                      <p className="text-sm text-gray-900">{new Date(selectedParcel.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    {selectedParcel.notes && (
-                      <div className="sm:col-span-2">
-                        <label className="text-sm font-medium text-gray-500">Notes</label>
-                        <p className="text-sm text-gray-900">{selectedParcel.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
