@@ -39,21 +39,22 @@ function AssignmentCell({ parcel, agents, onAssigned }) {
   const [agentId, setAgentId] = useState(parcel.agent?._id || parcel.agent || '');
 
   const isAssigned = Boolean(parcel.agent);
+  const lockAssignment = parcel.status !== 'Assigned';
   const save = async () => {
-    if (!agentId) return;
+    if (!agentId || lockAssignment) return;
     const updated = await apiFetch(`/parcels/${parcel._id}/assign`, { method: 'POST', body: JSON.stringify({ agentId }) });
     onAssigned(updated);
   };
   return (
     <div className="flex items-center gap-2">
-      <select className="rounded-md border px-2 py-1 text-sm" value={agentId} onChange={e => setAgentId(e.target.value)}>
+      <select className="rounded-md border px-2 py-1 text-sm disabled:opacity-50" disabled={lockAssignment} value={agentId} onChange={e => setAgentId(e.target.value)}>
         <option value="">{t.selectAgent}</option>
 
         {agents.map(a => (
           <option key={a._id} value={a._id}>{a.name}</option>
         ))}
       </select>
-      <button onClick={save} className="rounded-md bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-700">{isAssigned ? t.reassign : t.assign}</button>
+      <button onClick={save} disabled={lockAssignment} className="rounded-md bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50">{isAssigned ? t.reassign : t.assign}</button>
     </div>
   );
 }
@@ -89,7 +90,7 @@ export default function AdminPanel() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label={t.dailyBookings} value={metrics?.dailyBookings ?? '—'} />
         <Stat label={t.failedDeliveries} value={metrics?.failedDeliveries ?? '—'} />
-        <Stat label={t.codCollected} value={metrics?.codAmount != null ? `$${metrics.codAmount}` : '—'} />
+        <Stat label={t.codCollected} value={metrics?.codAmount != null ? `BDT ${metrics.codAmount}` : '—'} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -140,7 +141,7 @@ export default function AdminPanel() {
                     <td className="py-2 pr-4 font-medium">{p.trackingCode}</td>
                     <td className="py-2 pr-4">{p.customer?.name || '-'}</td>
                     <td className="py-2 pr-4"><span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{p.status}</span></td>
-                    <td className="py-2 pr-4">{p.paymentType}{p.paymentType === 'COD' ? ` ($${p.codAmount})` : ''}</td>
+                    <td className="py-2 pr-4">{p.paymentType}{p.paymentType === 'COD' ? ` (BDT ${p.codAmount})` : ''}</td>
                     <td className="py-2 pr-4">{agents.find(a => a._id === (p.agent?._id || p.agent))?.name || '-'}</td>
                     <td className="py-2 pr-4">
                       <AssignmentCell parcel={p} agents={agents} onAssigned={(updated) => {

@@ -16,6 +16,8 @@ import ParcelDetailView from './pages/ParcelDetailView.jsx';
 import CustomerParcelDetail from './pages/CustomerParcelDetail.jsx';
 import AdminAgentTracking from './pages/AdminAgentTracking.jsx';
 import AgentParcelDetails from './pages/AgentParcelDetails.jsx';
+import AgentParcelPickUpConfirmation from './pages/AgentParcelPickUpConfirmation.jsx';
+import CustomerQrScanner from './pages/CustomerQrScanner.jsx';
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -49,10 +51,12 @@ export default function App() {
               <Route element={<DeliveryAgentRoute />}>
                 <Route path="/agent" element={<AgentDashboard />} />
                 <Route path="/parcel/:id" element={<ParcelDetailView />} />
+                <Route path="/agent/pickup-scan" element={<AgentParcelPickUpConfirmation />} />
               </Route>
               <Route element={<CustomerRoute />}>
                 <Route path="/app" element={<CustomerDashboard />} />
                 <Route path="/customer/parcel/:id" element={<CustomerParcelDetail />} />
+                <Route path="/customer/parcel/qr/:id" element={<CustomerQrScanner />} />
               </Route>
               <Route path="/track/:id" element={<TrackParcel />} />
             </Route>

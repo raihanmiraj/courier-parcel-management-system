@@ -181,6 +181,14 @@ export const en = {
   liveTrackingActive: 'Live tracking active',
   agentLocationUpdated: 'Agent location updated',
   online: 'Online',
+
+  // QR
+  qrCode: 'QR Code',
+  parcelQr: 'Parcel QR',
+  loadingQr: 'Loading QR…',
+  showThisQr: 'Show this QR for pickup/delivery',
+  print: 'Print',
+  generating: 'Generating…',
   
   // Additional keys for AgentParcelDetails and AdminAgentTracking
   assignedAgent: 'Assigned Agent',

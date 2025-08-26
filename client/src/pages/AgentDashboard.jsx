@@ -266,7 +266,8 @@ export default function AgentDashboard() {
           </div>
         </div>
 
-        {/* Live Map */}
+        {/* Live Map */}test
+        {agentPosition}
         <LiveMap agentPosition={agentPosition} />
       </main>
 

@@ -112,7 +112,7 @@ export default function TrackParcel() {
             <div><span className="text-gray-500">To:</span> {parcel.deliveryAddress}</div>
             <div><span className="text-gray-500">Distance:</span> {distance ?? '—'}</div>
             <div><span className="text-gray-500">ETA:</span> {parcel.etaMinutes ? `${parcel.etaMinutes} min` : (duration ?? '—')}</div>
-            <div><span className="text-gray-500">Payment:</span> {parcel.paymentType}{parcel.paymentType==='COD' ? ` ($${parcel.codAmount})` : ''}</div>
+            <div><span className="text-gray-500">Payment:</span> {parcel.paymentType}{parcel.paymentType==='COD' ? ` (BDT ${parcel.codAmount})` : ''}</div>
           </div>
         </div>
       </div>

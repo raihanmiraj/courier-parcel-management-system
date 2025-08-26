@@ -22,25 +22,26 @@ export async function dashboardMetrics(_req, res) {
 export async function exportCsv(_req, res) {
 	try {
 		const parcels = await Parcel.find().lean();
-		const records = parcels.map(p => ({
-			trackingCode: p.trackingCode,
-			status: p.status,
-			paymentType: p.paymentType,
-			codAmount: p.codAmount,
-			createdAt: p.createdAt
-		}));
-		const csvWriter = createObjectCsvWriter({
-			path: 'parcels.csv',
-			headers: [
-				{ id: 'trackingCode', title: 'Tracking Code' },
-				{ id: 'status', title: 'Status' },
-				{ id: 'paymentType', title: 'Payment' },
-				{ id: 'codAmount', title: 'COD Amount' },
-				{ id: 'createdAt', title: 'Created At' }
-			]
-		});
-		await csvWriter.writeRecords(records);
-		res.download('parcels.csv');
+		// Stream CSV directly to the response to avoid filesystem issues on some hosts
+		res.setHeader('Content-Type', 'text/csv');
+		res.setHeader('Content-Disposition', 'attachment; filename="parcels.csv"');
+		const header = ['Tracking Code', 'Status', 'Payment', 'COD Amount', 'Created At'];
+		res.write(header.join(',') + '\n');
+		for (const p of parcels) {
+			const row = [
+				p.trackingCode ?? '',
+				p.status ?? '',
+				p.paymentType ?? '',
+				p.codAmount ?? 0,
+				p.createdAt ? new Date(p.createdAt).toISOString() : ''
+			];
+			const escape = (value) => {
+				const s = String(value ?? '');
+				return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+			};
+			res.write(row.map(escape).join(',') + '\n');
+		}
+		res.end();
 	} catch (err) {
 		res.status(500).json({ message: 'CSV export failed' });
 	}

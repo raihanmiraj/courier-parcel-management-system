@@ -2,6 +2,7 @@ import { Parcel, PARCEL_STATUSES } from '../models/Parcel.js';
 import { User } from '../models/User.js';
 import { io } from '../index.js';
 import { v4 as uuidv4 } from 'uuid';
+import { sendStatusEmail } from '../utils/mailer.js';
 
 export async function createParcel(req, res) {
 	try {
@@ -93,7 +94,7 @@ export async function updateStatus(req, res) {
 	try {
 		const { status } = req.body;
 		if (!PARCEL_STATUSES.includes(status)) return res.status(400).json({ message: 'Invalid status' });
-		const parcel = await Parcel.findById(req.params.id);
+		const parcel = await Parcel.findById(req.params.id).populate('customer', 'name email');
 		if (!parcel) return res.status(404).json({ message: 'Not found' });
 		// Agent or Admin can update; Customer cannot.
 		if (!['admin', 'agent'].includes(req.user.role)) return res.status(403).json({ message: 'Forbidden' });
@@ -104,6 +105,13 @@ export async function updateStatus(req, res) {
 		parcel.status = status;
 		await parcel.save();
 		io.to(`parcel:${parcel.id}`).emit('parcel:update', { id: parcel.id, status: parcel.status });
+		// Best-effort email to customer
+		try {
+			const to = parcel?.customer?.email;
+			if (to) {
+				await sendStatusEmail({ to, parcel, newStatus: status });
+			}
+		} catch (_) {}
 		res.json(parcel);
 	} catch (err) {
 		res.status(500).json({ message: 'Update status failed' });

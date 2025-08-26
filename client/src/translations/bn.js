@@ -181,6 +181,14 @@ export const bn = {
   liveTrackingActive: 'লাইভ ট্র্যাকিং সক্রিয়',
   agentLocationUpdated: 'এজেন্টের অবস্থান আপডেট হয়েছে',
   online: 'অনলাইন',
+
+  // QR
+  qrCode: 'কিউআর কোড',
+  parcelQr: 'পার্সেল কিউআর',
+  loadingQr: 'কিউআর লোড হচ্ছে…',
+  showThisQr: 'তোলা/ডেলিভারির জন্য এই কিউআর দেখান',
+  print: 'প্রিন্ট',
+  generating: 'তৈরি হচ্ছে…',
   
   // Additional keys for AgentParcelDetails and AdminAgentTracking
   assignedAgent: 'নির্ধারিত এজেন্ট',

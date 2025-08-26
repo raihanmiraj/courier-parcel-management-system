@@ -566,7 +566,8 @@ export default function AgentParcelDetails() {
               <select 
                 value={status} 
                 onChange={(e) => setStatus(e.target.value)}
-                className="rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={!(parcel?.status === 'Picked Up' || parcel?.status === 'In Transit' || parcel?.status === 'Delivered' || parcel?.status === 'Failed')}
+                className="rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
               >
                 <option value="Pending">Pending</option>
                 <option value="Assigned">Assigned</option>
@@ -575,6 +576,9 @@ export default function AgentParcelDetails() {
                 <option value="Delivered">Delivered</option>
                 <option value="Failed">Failed</option>
               </select>
+              {!(parcel?.status === 'Picked Up' || parcel?.status === 'In Transit' || parcel?.status === 'Delivered' || parcel?.status === 'Failed') && (
+                <div className="text-xs text-gray-500">Scan customer QR to enable status updates.</div>
+              )}
               <button 
                 onClick={updateStatus}
                 disabled={updatingStatus || status === parcel.status}
@@ -582,6 +586,14 @@ export default function AgentParcelDetails() {
               >
                 {updatingStatus ? t.updating : t.updateStatus}
               </button>
+              {!(parcel?.status === 'Picked Up' || parcel?.status === 'In Transit' || parcel?.status === 'Delivered' || parcel?.status === 'Failed') && (
+                <button 
+                  onClick={() => navigate('/agent/pickup-scan')}
+                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                >
+                  Scan to Pick Up
+                </button>
+              )}
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${parcel.status === 'Delivered' ? 'bg-green-100 text-green-800' :
                 parcel.status === 'In Transit' ? 'bg-blue-100 text-blue-800' :
                   parcel.status === 'Failed' ? 'bg-red-100 text-red-800' :

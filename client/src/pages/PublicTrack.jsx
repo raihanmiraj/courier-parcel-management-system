@@ -180,7 +180,7 @@ export default function PublicTrack() {
               <div><span className="text-gray-500">To:</span> {parcel.deliveryAddress}</div>
               <div><span className="text-gray-500">Distance:</span> {distance ?? '—'}</div>
               <div><span className="text-gray-500">ETA:</span> {parcel.etaMinutes ? `${parcel.etaMinutes} min` : (duration ?? '—')}</div>
-              <div><span className="text-gray-500">Payment:</span> {parcel.paymentType}{parcel.paymentType==='COD' ? ` ($${parcel.codAmount})` : ''}</div>
+              <div><span className="text-gray-500">Payment:</span> {parcel.paymentType}{parcel.paymentType==='COD' ? ` (BDT ${parcel.codAmount})` : ''}</div>
               {parcel.agent && <div><span className="text-gray-500">Agent:</span> {parcel.agent.name}</div>}
               {parcel.currentLocation && (
                 <div><span className="text-gray-500">Last Update:</span> {new Date(parcel.currentLocation.updatedAt).toLocaleString()}</div>

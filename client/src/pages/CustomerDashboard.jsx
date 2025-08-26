@@ -9,7 +9,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher.jsx';
 function Navbar({ onLogout, user }) {
   const { currentLanguage } = useLanguage();
   const t = getTranslations(currentLanguage);
-  
+
   return (
     <header className="sticky top-0 z-[9999999] w-full border-b bg-white/80 backdrop-blur">
       <div className="container flex h-14 items-center justify-between">
@@ -110,7 +110,7 @@ function BookingForm({ onCreated }) {
 function ParcelTable({ parcels }) {
   const { currentLanguage } = useLanguage();
   const t = getTranslations(currentLanguage);
-  
+
   return (
     <div className="rounded-xl border bg-white p-6 shadow-sm">
       <h3 className="mb-4 text-lg font-semibold">{t.parcels}</h3>
@@ -123,6 +123,7 @@ function ParcelTable({ parcels }) {
               <th className="py-2 pr-4">{t.payment}</th>
               <th className="py-2 pr-4">{t.created}</th>
               <th className="py-2 pr-4">{t.actions}</th>
+
             </tr>
           </thead>
           <tbody>
@@ -132,18 +133,28 @@ function ParcelTable({ parcels }) {
                 <td className="py-2 pr-4">
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium">{p.status}</span>
                 </td>
-                <td className="py-2 pr-4">{p.paymentType}{p.paymentType === 'COD' ? ` ($${p.codAmount})` : ''}</td>
+                <td className="py-2 pr-4">{p.paymentType}{p.paymentType === 'COD' ? ` (BDT ${p.codAmount})` : ''}</td>
                 <td className="py-2 pr-4">{new Date(p.createdAt).toLocaleString()}</td>
-                <td className="py-2 pr-4">
+                <td className="py-2 pr-4 flex gap-3">
                   <div className="flex items-center gap-2">
-                    <Link 
+                    <Link
                       to={`/customer/parcel/${p._id}`}
                       className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
                     >
                       {t.view}
                     </Link>
                   </div>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/customer/parcel/qr/${p._id}`}
+                      className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                    >
+                      {t.qrCode}
+                    </Link>
+                  </div>
                 </td>
+
               </tr>
             ))}
           </tbody>
