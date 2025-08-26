@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 // Defaults to Gmail SMTP for local testing; can be overridden by env vars
 const SMTP_HOST = process.env.MAIL_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.MAIL_PORT || 465);
-const SMTP_USER = process.env.MAIL_USER || 'blazebd.com@gmail.com';
-const SMTP_PASS = process.env.MAIL_PASS || 'gtahlybokrxppyxr';
+const SMTP_USER = process.env.MAIL_USER ;
+const SMTP_PASS = process.env.MAIL_PASS ;
 const SMTP_SECURE = process.env.MAIL_SECURE ? process.env.MAIL_SECURE === 'true' : SMTP_PORT === 465;
 const SMTP_FROM = process.env.MAIL_FROM || SMTP_USER;
 const SMTP_FROM_NAME = process.env.MAIL_FROM_NAME || 'Courier Parcel';
