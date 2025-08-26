@@ -137,6 +137,12 @@ export default function TrackPublicParcel() {
             {user ? (
               <>
                 <span className="text-sm text-gray-600">{user.name} <span className="text-gray-400">• {user.role}</span></span>
+                <Link 
+                  to={user.role === 'admin' ? '/admin' : user.role === 'agent' ? '/agent' : '/app'} 
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Dashboard
+                </Link>
                 <button onClick={logout} className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200">Logout</button>
               </>
             ) : (

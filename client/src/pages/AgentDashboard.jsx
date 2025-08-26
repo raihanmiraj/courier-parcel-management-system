@@ -35,6 +35,14 @@ function Navbar({ onLogout, user }) {
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-600">{user?.name} <span className="text-gray-400">• {user?.role}</span></div>
           <LanguageSwitcher />
+          {user?.role === 'agent' && (
+            <Link 
+              to="/agent/pickup-scan" 
+              className="inline-flex items-center rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+            >
+              📱 Pickup Scan
+            </Link>
+          )}
           <button onClick={onLogout} className="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200">{t.logout}</button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiFetch, apiFetchBlob } from '../api';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getTranslations } from '../translations';
+import { Link } from 'react-router-dom';
 
 function Stat({ label, value }) {
   return (
@@ -15,7 +16,7 @@ function Stat({ label, value }) {
 function ExportButtons() {
   const { currentLanguage } = useLanguage();
   const t = getTranslations(currentLanguage);
-  
+
   const download = async (path, filename) => {
     const blob = await apiFetchBlob(path);
     const url = URL.createObjectURL(blob);
@@ -55,6 +56,7 @@ function AssignmentCell({ parcel, agents, onAssigned }) {
         ))}
       </select>
       <button onClick={save} disabled={lockAssignment} className="rounded-md bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50">{isAssigned ? t.reassign : t.assign}</button>
+      <Link to={`/admin/parcel/${parcel._id}`} className="rounded-md bg-brand-600 px-2 py-1 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50">{t.view}</Link>
     </div>
   );
 }
