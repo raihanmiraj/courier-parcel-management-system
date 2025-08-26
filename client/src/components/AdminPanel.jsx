@@ -39,7 +39,7 @@ function AssignmentCell({ parcel, agents, onAssigned }) {
   const [agentId, setAgentId] = useState(parcel.agent?._id || parcel.agent || '');
 
   const isAssigned = Boolean(parcel.agent);
-  const lockAssignment = parcel.status !== 'Assigned';
+  const lockAssignment = parcel.status !== ('Assigned' && 'Pending');
   const save = async () => {
     if (!agentId || lockAssignment) return;
     const updated = await apiFetch(`/parcels/${parcel._id}/assign`, { method: 'POST', body: JSON.stringify({ agentId }) });

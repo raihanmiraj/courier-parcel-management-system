@@ -17,6 +17,7 @@ import CustomerParcelDetail from './pages/CustomerParcelDetail.jsx';
 import AdminAgentTracking from './pages/AdminAgentTracking.jsx';
 import AgentParcelDetails from './pages/AgentParcelDetails.jsx';
 import AgentParcelPickUpConfirmation from './pages/AgentParcelPickUpConfirmation.jsx';
+import TrackPublicParcel from './pages/TrackPublicParcel.jsx';
 import CustomerQrScanner from './pages/CustomerQrScanner.jsx';
 
 function RootRedirect() {
@@ -61,7 +62,7 @@ export default function App() {
               <Route path="/track/:id" element={<TrackParcel />} />
             </Route>
 
-            <Route path="/" element={<RootRedirect />} />
+            <Route path="/" element={<TrackPublicParcel />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
