@@ -408,7 +408,7 @@ export default function ParcelDetailView() {
                   {parcel.paymentType === 'COD' && (
                     <div>
                       <label className="text-sm font-medium text-gray-500">{t.codAmount}</label>
-                      <p className="text-sm text-gray-900">${parcel.codAmount}</p>
+                      <p className="text-sm text-gray-900">BDT {parcel.codAmount}</p>
                     </div>
                   )}
                   <div>
